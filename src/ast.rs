@@ -1,16 +1,8 @@
+/// Name
 #[derive(PartialEq, Debug)]
 pub struct Name(pub String);
 
-#[derive(PartialEq, Debug)]
-pub enum Compare {
-    GT,
-    LT,
-    GTE,
-    LTE,
-    NEQ,
-    EQ,
-}
-
+/// funcname ::= Name {‘.’ Name} [‘:’ Name]
 #[derive(Debug, PartialEq)]
 pub struct FuncName {
     pub path: Vec<Name>,
@@ -46,6 +38,7 @@ pub enum BinOp {
     Or,
 }
 
+/// exp binop exp
 #[derive(Debug, PartialEq)]
 pub struct BinExp {
     pub op: BinOp,
@@ -53,12 +46,15 @@ pub struct BinExp {
     pub rhs: Box<Expr>,
 }
 
+/// unop exp
 #[derive(Debug, PartialEq)]
 pub struct UnExp {
     pub op: Unop,
     pub exp: Box<Expr>,
 }
 
+/// exp ::= nil | false | true | Numeral | LiteralString | ‘...’ | functiondef |
+///         prefixexp | tableconstructor | exp binop exp | unop exp
 #[derive(Debug, PartialEq)]
 pub enum Expr {
     Nil,
@@ -73,6 +69,7 @@ pub enum Expr {
     UnExp(UnExp),
 }
 
+/// field ::= ‘[’ exp ‘]’ ‘=’ exp | Name ‘=’ exp | exp
 #[derive(Debug, PartialEq)]
 pub enum Field {
     NameAssign(Name, Expr),
@@ -80,9 +77,11 @@ pub enum Field {
     PosAssign(Expr),
 }
 
+/// tableconstructor ::= ‘{’ [fieldlist] ‘}’
 #[derive(Debug, PartialEq)]
 pub struct TableConstructor(pub Vec<Field>);
 
+/// args ::=  ‘(’ [explist] ‘)’ | tableconstructor | LiteralString
 #[derive(Debug, PartialEq)]
 pub enum Args {
     ExprList(Vec<Expr>),
@@ -90,24 +89,28 @@ pub enum Args {
     String(String),
 }
 
+/// functioncall ::=  prefixexp args | prefixexp ‘:’ Name args
 #[derive(Debug, PartialEq)]
 pub struct FunctionCall {
     pub expr: Box<PrefixExpr>,
     pub args: Args,
 }
 
+/// prefixexp ‘[’ exp ‘]’
 #[derive(Debug, PartialEq)]
 pub struct IndexExpr {
     pub expr: Box<PrefixExpr>,
     pub arg: Expr,
 }
 
+/// prefixexp ‘.’ Name
 #[derive(Debug, PartialEq)]
 pub struct PropertyAccess {
     pub expr: Box<PrefixExpr>,
     pub name: Name,
 }
 
+/// var ::=  Name | prefixexp ‘[’ exp ‘]’ | prefixexp ‘.’ Name
 #[derive(Debug, PartialEq)]
 pub enum Var {
     Name(Name),
@@ -115,6 +118,7 @@ pub enum Var {
     PropertyAccess(PropertyAccess),
 }
 
+/// prefixexp ::= var | functioncall | ‘(’ exp ‘)’
 #[derive(Debug, PartialEq)]
 pub enum PrefixExpr {
     Var(Var),
@@ -122,6 +126,7 @@ pub enum PrefixExpr {
     Expr(Expr),
 }
 
+/// block ::= {stat} [retstat]
 #[derive(Debug, PartialEq)]
 pub struct Block {
     pub stats: Vec<Stat>,
@@ -156,6 +161,7 @@ pub struct RepeatBlock {
     pub expr: Expr,
 }
 
+/// elseif exp then block
 #[derive(Debug, PartialEq)]
 pub struct ElseIf {
     pub expr: Expr,
@@ -187,6 +193,21 @@ pub struct ForIn {
     pub block: Block,
 }
 
+/// stat ::=  ‘;’ |
+///         varlist ‘=’ explist |
+///         functioncall |
+///         label |
+///         break |
+///         goto Name |
+///         do block end |
+///         while exp do block end |
+///         repeat block until exp |
+///         if exp then block {elseif exp then block} [else block] end |
+///         for Name ‘=’ exp ‘,’ exp [‘,’ exp] do block end |
+///         for namelist in explist do block end |
+///         function funcname funcbody |
+///         local function Name funcbody |
+///         local namelist [‘=’ explist]
 #[derive(Debug, PartialEq)]
 pub enum Stat {
     SemiColon,
@@ -206,30 +227,35 @@ pub enum Stat {
     LocalAssignment(LocalAssignment),
 }
 
+/// funcbody ::= ‘(’ [parlist] ‘)’ block end
 #[derive(Debug, PartialEq)]
 pub struct FuncBody {
     pub params: Params,
     pub body: Block,
 }
 
+/// local function Name funcbody
 #[derive(Debug, PartialEq)]
 pub struct LocalFunctionDef {
     pub name: Name,
     pub body: FuncBody,
 }
 
+/// function funcname funcbody
 #[derive(Debug, PartialEq)]
 pub struct FunctionDef {
     pub name: FuncName,
     pub body: FuncBody,
 }
 
+/// parlist ::= namelist [‘,’ ‘...’] | ‘...’
 #[derive(Debug, PartialEq)]
 pub struct Params {
     pub names: Vec<Name>,
     pub variadic: bool,
 }
 
+/// unop ::= ‘-’ | not | ‘#’ | ‘~’
 #[derive(Debug, PartialEq)]
 pub enum Unop {
     Minus,
