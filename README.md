@@ -1,4 +1,4 @@
-# luis
+# luis [![CircleCI](https://circleci.com/gh/sbdchd/luis.svg?style=svg)](https://circleci.com/gh/sbdchd/luis) [![cargo-badge](https://img.shields.io/crates/v/luis.svg)](https://crates.io/crates/luis)
 
 > A Rust based Lua parser
 
