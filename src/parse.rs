@@ -1,9 +1,12 @@
 use ast::*;
 use iter::{AssertNextIterator, ForwardBackwardIterator, PeekableIterator, TokenIter};
 use lex::{Lexer, Token};
+use std;
+
+type Result<T> = std::result::Result<T, ()>;
 
 /// parse a given blob of lua text
-pub fn parse(text: &str) -> Result<Block, ()> {
+pub fn parse(text: &str) -> Result<Block> {
     let tokens: Vec<_> = Lexer::new(text)
         .filter(|t| match t {
             Token::Comment(_) => false,
@@ -15,7 +18,7 @@ pub fn parse(text: &str) -> Result<Block, ()> {
 }
 
 /// label ::= ‘::’ Name ‘::’
-fn parse_label(tokens: &mut TokenIter<Token>) -> Result<Name, ()> {
+fn parse_label(tokens: &mut TokenIter<Token>) -> Result<Name> {
     tokens.assert_next(&Token::DBColon)?;
     if let Some(Token::Ident(ident)) = tokens.next() {
         tokens.assert_next(&Token::DBColon)?;
@@ -27,7 +30,7 @@ fn parse_label(tokens: &mut TokenIter<Token>) -> Result<Name, ()> {
     }
 }
 /// funcname ::= Name {‘.’ Name} [‘:’ Name]
-fn parse_funcname(tokens: &mut TokenIter<Token>) -> Result<FuncName, ()> {
+fn parse_funcname(tokens: &mut TokenIter<Token>) -> Result<FuncName> {
     let first_name = tokens.next();
     let first_name = match first_name {
         Some(Token::Ident(first_name)) => first_name,
@@ -59,7 +62,7 @@ fn parse_funcname(tokens: &mut TokenIter<Token>) -> Result<FuncName, ()> {
 
 /// exp ::= nil | false | true | Numeral | LiteralString | ‘...’ | functiondef |
 ///         prefixexp | tableconstructor | exp binop exp | unop exp
-fn parse_expr(tokens: &mut TokenIter<Token>) -> Result<Expr, ()> {
+fn parse_expr(tokens: &mut TokenIter<Token>) -> Result<Expr> {
     match tokens.next() {
         Some(Token::Nil) => Ok(Expr::Nil),
         Some(Token::True) => Ok(Expr::Bool(true)),
@@ -148,7 +151,7 @@ fn parse_expr(tokens: &mut TokenIter<Token>) -> Result<Expr, ()> {
 }
 
 /// field ::= ‘[’ exp ‘]’ ‘=’ exp | Name ‘=’ exp | exp
-fn parse_field(tokens: &mut TokenIter<Token>) -> Result<Field, ()> {
+fn parse_field(tokens: &mut TokenIter<Token>) -> Result<Field> {
     match tokens.next() {
         // Name '=' exp
         Some(Token::Ident(name)) => {
@@ -190,7 +193,7 @@ fn parse_field(tokens: &mut TokenIter<Token>) -> Result<Field, ()> {
 }
 
 /// tableconstructor ::= ‘{’ [fieldlist] ‘}’
-fn parse_table_constructor(tokens: &mut TokenIter<Token>) -> Result<TableConstructor, ()> {
+fn parse_table_constructor(tokens: &mut TokenIter<Token>) -> Result<TableConstructor> {
     match tokens.next() {
         Some(Token::LCurly) => {
             if let Some(Token::RCurly) = tokens.peek() {
@@ -211,7 +214,7 @@ fn parse_table_constructor(tokens: &mut TokenIter<Token>) -> Result<TableConstru
 }
 
 /// varlist ::= var {‘,’ var}
-fn parse_varlist(tokens: &mut TokenIter<Token>) -> Result<Vec<Var>, ()> {
+fn parse_varlist(tokens: &mut TokenIter<Token>) -> Result<Vec<Var>> {
     let mut varlist = vec![];
 
     if let Ok(var) = parse_var(tokens) {
@@ -235,7 +238,7 @@ fn parse_varlist(tokens: &mut TokenIter<Token>) -> Result<Vec<Var>, ()> {
 }
 
 /// explist ::= exp {‘,’ exp}
-fn parse_exprlist(tokens: &mut TokenIter<Token>) -> Result<Vec<Expr>, ()> {
+fn parse_exprlist(tokens: &mut TokenIter<Token>) -> Result<Vec<Expr>> {
     let mut exprs = vec![];
 
     if let Ok(expr) = parse_expr(tokens) {
@@ -259,7 +262,7 @@ fn parse_exprlist(tokens: &mut TokenIter<Token>) -> Result<Vec<Expr>, ()> {
 }
 
 /// args ::=  ‘(’ [explist] ‘)’ | tableconstructor | LiteralString
-fn parse_args(tokens: &mut TokenIter<Token>) -> Result<Args, ()> {
+fn parse_args(tokens: &mut TokenIter<Token>) -> Result<Args> {
     match tokens.next() {
         Some(Token::String(s)) => Ok(Args::String(s.to_string())),
         Some(Token::LParen) => {
@@ -287,7 +290,7 @@ fn parse_args(tokens: &mut TokenIter<Token>) -> Result<Args, ()> {
 /// foo
 /// bar[0]
 /// bar.bizz
-fn parse_var(tokens: &mut TokenIter<Token>) -> Result<Var, ()> {
+fn parse_var(tokens: &mut TokenIter<Token>) -> Result<Var> {
     match tokens.peek() {
         Some(Token::Ident(ident)) => {
             tokens.next();
@@ -357,7 +360,7 @@ fn parse_var(tokens: &mut TokenIter<Token>) -> Result<Var, ()> {
 /// prefixexp ::= var | functioncall | ‘(’ exp ‘)’
 // functioncall ::=  prefixexp args | prefixexp ‘:’ Name args
 // var ::=  Name | prefixexp ‘[’ exp ‘]’ | prefixexp ‘.’ Name
-fn parse_prefix_exp(tokens: &mut TokenIter<Token>) -> Result<PrefixExpr, ()> {
+fn parse_prefix_exp(tokens: &mut TokenIter<Token>) -> Result<PrefixExpr> {
     match tokens.peek() {
         Some(Token::LParen) => {
             tokens.next();
@@ -418,7 +421,7 @@ fn parse_prefix_exp(tokens: &mut TokenIter<Token>) -> Result<PrefixExpr, ()> {
 ///         function funcname funcbody |
 ///         local function Name funcbody |
 ///         local namelist [‘=’ explist]
-fn parse_stat(tokens: &mut TokenIter<Token>) -> Result<Stat, ()> {
+fn parse_stat(tokens: &mut TokenIter<Token>) -> Result<Stat> {
     match tokens.peek() {
         Some(Token::SemiColon) => {
             tokens.next();
@@ -482,7 +485,7 @@ fn parse_stat(tokens: &mut TokenIter<Token>) -> Result<Stat, ()> {
 }
 
 /// varlist ‘=’ explist
-fn parse_assignment(tokens: &mut TokenIter<Token>) -> Result<Assignment, ()> {
+fn parse_assignment(tokens: &mut TokenIter<Token>) -> Result<Assignment> {
     let varlist = parse_varlist(tokens)?;
 
     if let Some(Token::Assign) = tokens.peek() {
@@ -497,7 +500,7 @@ fn parse_assignment(tokens: &mut TokenIter<Token>) -> Result<Assignment, ()> {
 }
 
 /// local namelist [‘=’ explist]
-fn parse_local_assignment(tokens: &mut TokenIter<Token>) -> Result<LocalAssignment, ()> {
+fn parse_local_assignment(tokens: &mut TokenIter<Token>) -> Result<LocalAssignment> {
     if let Some(Token::Local) = tokens.peek() {
         tokens.next();
     } else {
@@ -517,7 +520,7 @@ fn parse_local_assignment(tokens: &mut TokenIter<Token>) -> Result<LocalAssignme
 }
 
 /// local function Name funcbody
-fn parse_local_function_def(tokens: &mut TokenIter<Token>) -> Result<LocalFunctionDef, ()> {
+fn parse_local_function_def(tokens: &mut TokenIter<Token>) -> Result<LocalFunctionDef> {
     if let Some(Token::Local) = tokens.peek() {
         tokens.next();
     } else {
@@ -540,7 +543,7 @@ fn parse_local_function_def(tokens: &mut TokenIter<Token>) -> Result<LocalFuncti
 }
 
 /// function funcname funcbody
-fn parse_function_def(tokens: &mut TokenIter<Token>) -> Result<FunctionDef, ()> {
+fn parse_function_def(tokens: &mut TokenIter<Token>) -> Result<FunctionDef> {
     if let Some(Token::Function) = tokens.peek() {
         tokens.next();
     } else {
@@ -555,7 +558,7 @@ fn parse_function_def(tokens: &mut TokenIter<Token>) -> Result<FunctionDef, ()> 
 }
 
 /// for namelist in explist do block end
-fn parse_for_in(tokens: &mut TokenIter<Token>) -> Result<ForIn, ()> {
+fn parse_for_in(tokens: &mut TokenIter<Token>) -> Result<ForIn> {
     if let Some(Token::For) = tokens.peek() {
         tokens.next();
     } else {
@@ -582,7 +585,7 @@ fn parse_for_in(tokens: &mut TokenIter<Token>) -> Result<ForIn, ()> {
 }
 
 /// for Name ‘=’ exp ‘,’ exp [‘,’ exp] do block end
-fn parse_for_range(tokens: &mut TokenIter<Token>) -> Result<ForRange, ()> {
+fn parse_for_range(tokens: &mut TokenIter<Token>) -> Result<ForRange> {
     if let Some(Token::For) = tokens.peek() {
         tokens.next();
     } else {
@@ -627,7 +630,7 @@ fn parse_for_range(tokens: &mut TokenIter<Token>) -> Result<ForRange, ()> {
 }
 
 /// elseif exp then block
-fn parse_elseif(tokens: &mut TokenIter<Token>) -> Result<ElseIf, ()> {
+fn parse_elseif(tokens: &mut TokenIter<Token>) -> Result<ElseIf> {
     if let Some(Token::ElseIf) = tokens.peek() {
         tokens.next();
     } else {
@@ -648,7 +651,7 @@ fn parse_elseif(tokens: &mut TokenIter<Token>) -> Result<ElseIf, ()> {
 }
 
 /// else block
-fn parse_else_block(tokens: &mut TokenIter<Token>) -> Result<Option<Block>, ()> {
+fn parse_else_block(tokens: &mut TokenIter<Token>) -> Result<Option<Block>> {
     if let Some(Token::Else) = tokens.peek() {
         tokens.next();
         Ok(Some(parse_block(tokens)?))
@@ -658,7 +661,7 @@ fn parse_else_block(tokens: &mut TokenIter<Token>) -> Result<Option<Block>, ()> 
 }
 
 /// if exp then block {elseif exp then block} [else block] end
-fn parse_if_block(tokens: &mut TokenIter<Token>) -> Result<IfBlock, ()> {
+fn parse_if_block(tokens: &mut TokenIter<Token>) -> Result<IfBlock> {
     if let Some(Token::If) = tokens.peek() {
         tokens.next();
     } else {
@@ -692,7 +695,7 @@ fn parse_if_block(tokens: &mut TokenIter<Token>) -> Result<IfBlock, ()> {
 }
 
 /// repeat block until exp
-fn parse_repeat_block(tokens: &mut TokenIter<Token>) -> Result<RepeatBlock, ()> {
+fn parse_repeat_block(tokens: &mut TokenIter<Token>) -> Result<RepeatBlock> {
     if let Some(Token::Repeat) = tokens.peek() {
         tokens.next();
     } else {
@@ -713,7 +716,7 @@ fn parse_repeat_block(tokens: &mut TokenIter<Token>) -> Result<RepeatBlock, ()> 
 }
 
 /// while exp do block end
-fn parse_while_block(tokens: &mut TokenIter<Token>) -> Result<WhileBlock, ()> {
+fn parse_while_block(tokens: &mut TokenIter<Token>) -> Result<WhileBlock> {
     if let Some(Token::While) = tokens.peek() {
         tokens.next();
     } else {
@@ -728,7 +731,7 @@ fn parse_while_block(tokens: &mut TokenIter<Token>) -> Result<WhileBlock, ()> {
 }
 
 /// do block end
-fn parse_do_block(tokens: &mut TokenIter<Token>) -> Result<Block, ()> {
+fn parse_do_block(tokens: &mut TokenIter<Token>) -> Result<Block> {
     if let Some(Token::Do) = tokens.peek() {
         tokens.next();
     } else {
@@ -745,7 +748,7 @@ fn parse_do_block(tokens: &mut TokenIter<Token>) -> Result<Block, ()> {
 }
 
 /// block ::= {stat} [retstat]
-fn parse_block(tokens: &mut TokenIter<Token>) -> Result<Block, ()> {
+fn parse_block(tokens: &mut TokenIter<Token>) -> Result<Block> {
     let mut stats = vec![];
     while let Ok(stat) = parse_stat(tokens) {
         stats.push(stat);
@@ -755,7 +758,7 @@ fn parse_block(tokens: &mut TokenIter<Token>) -> Result<Block, ()> {
 }
 
 /// retstat ::= return [explist] [‘;’]
-fn parse_retstat(tokens: &mut TokenIter<Token>) -> Result<Option<Vec<Expr>>, ()> {
+fn parse_retstat(tokens: &mut TokenIter<Token>) -> Result<Option<Vec<Expr>>> {
     match tokens.peek() {
         Some(Token::Return) => {
             tokens.next();
@@ -772,7 +775,7 @@ fn parse_retstat(tokens: &mut TokenIter<Token>) -> Result<Option<Vec<Expr>>, ()>
 }
 
 /// funcbody ::= ‘(’ [parlist] ‘)’ block end
-fn parse_funcbody(tokens: &mut TokenIter<Token>) -> Result<FuncBody, ()> {
+fn parse_funcbody(tokens: &mut TokenIter<Token>) -> Result<FuncBody> {
     tokens.assert_next(&Token::LParen)?;
     let params = parse_parlist(tokens)?;
     tokens.assert_next(&Token::RParen)?;
@@ -786,7 +789,7 @@ fn parse_funcbody(tokens: &mut TokenIter<Token>) -> Result<FuncBody, ()> {
 /// functiondef ::= function funcbody
 /// stat ::= function funcname funcbody
 /// stat ::= local function Name funcbody
-fn parse_functiondef(tokens: &mut TokenIter<Token>) -> Result<FunctionDef, ()> {
+fn parse_functiondef(tokens: &mut TokenIter<Token>) -> Result<FunctionDef> {
     if let Some(Token::Function) = tokens.next() {
         let name = parse_funcname(tokens)?;
         let body = parse_funcbody(tokens)?;
@@ -798,7 +801,7 @@ fn parse_functiondef(tokens: &mut TokenIter<Token>) -> Result<FunctionDef, ()> {
 }
 
 /// namelist ::= Name {‘,’ Name}
-fn parse_namelist(tokens: &mut TokenIter<Token>) -> Result<Vec<Name>, ()> {
+fn parse_namelist(tokens: &mut TokenIter<Token>) -> Result<Vec<Name>> {
     let first_name = match tokens.next().ok_or_else(|| ())? {
         Token::Ident(name) => name,
         _ => return Err(()),
@@ -826,7 +829,7 @@ fn parse_namelist(tokens: &mut TokenIter<Token>) -> Result<Vec<Name>, ()> {
 }
 
 /// parlist ::= namelist [‘,’ ‘...’] | ‘...’
-fn parse_parlist(tokens: &mut TokenIter<Token>) -> Result<Params, ()> {
+fn parse_parlist(tokens: &mut TokenIter<Token>) -> Result<Params> {
     match tokens.peek() {
         // | '...'
         Some(Token::Dots) => {
@@ -863,7 +866,7 @@ fn parse_parlist(tokens: &mut TokenIter<Token>) -> Result<Params, ()> {
 
 /// fieldlist ::= field {fieldsep field} [fieldsep]
 /// fieldsep ::= ‘,’ | ‘;’
-fn parse_fieldlist(tokens: &mut TokenIter<Token>) -> Result<Vec<Field>, ()> {
+fn parse_fieldlist(tokens: &mut TokenIter<Token>) -> Result<Vec<Field>> {
     let mut fields = vec![];
 
     while let Ok(f) = parse_field(tokens) {
