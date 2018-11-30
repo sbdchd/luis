@@ -11,8 +11,7 @@ pub fn parse(text: &str) -> Result<Block> {
         .filter(|t| match t {
             Token::Comment(_) => false,
             _ => true,
-        })
-        .collect();
+        }).collect();
     let mut tokens = TokenIter::new(&tokens);
     parse_block(&mut tokens)
 }
