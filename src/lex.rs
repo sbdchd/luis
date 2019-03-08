@@ -2,7 +2,19 @@
 // https://www.lua.org/manual/5.3/manual.html
 
 #[derive(PartialEq, Debug, Clone)]
-pub enum Token {
+pub struct Span {
+    pub start: usize,
+    pub end: usize,
+}
+
+#[derive(PartialEq, Debug, Clone)]
+pub struct Token {
+    pub kind: TokenKind,
+    pub span: Span,
+}
+
+#[derive(PartialEq, Debug, Clone)]
+pub enum TokenKind {
     And,
     Break,
     Do,
@@ -151,6 +163,8 @@ impl Lexer {
 
     // '--[[' CONTENT ']]--'
     fn multi_line_comment(&mut self) -> Option<Token> {
+        let start = self.cursor;
+
         self.eat_chars(4);
 
         let mut comment = String::new();
@@ -158,7 +172,11 @@ impl Lexer {
         loop {
             if self.match_chars("]]--") {
                 self.eat_chars(4);
-                break Some(Token::Comment(Comment::MultiLine(comment)));
+                let end = self.cursor;
+                break Some(Token {
+                    kind: TokenKind::Comment(Comment::MultiLine(comment)),
+                    span: Span { start, end },
+                });
             } else if let Some(c) = self.eat_char() {
                 comment.push(c);
             } else {
@@ -169,6 +187,7 @@ impl Lexer {
 
     // '--' CONTENT '\n'?
     fn single_line_comment(&mut self) -> Option<Token> {
+        let start = self.cursor;
         self.eat_chars(2);
         let mut comment = String::new();
         loop {
@@ -181,11 +200,16 @@ impl Lexer {
                 break;
             }
         }
-        Some(Token::Comment(Comment::SingleLine(comment)))
+        let end = self.cursor;
+        Some(Token {
+            kind: TokenKind::Comment(Comment::SingleLine(comment)),
+            span: Span { start, end },
+        })
     }
 
     // '\'' CONTENT '\'' | ''' CONTENT '"'
     fn single_line_string(&mut self) -> Option<Token> {
+        let start = self.cursor;
         let closing = self.eat_char();
         let mut s = String::new();
         loop {
@@ -196,17 +220,26 @@ impl Lexer {
                 None => return None,
             }
         }
-        Some(Token::String(s))
+        let end = self.cursor;
+        Some(Token {
+            kind: TokenKind::String(s),
+            span: Span { start, end },
+        })
     }
 
     // '[[' CONTENT ']]'
     fn multi_line_string(&mut self) -> Option<Token> {
+        let start = self.cursor;
         self.eat_chars(2);
         let mut s = String::new();
+        let end = self.cursor;
         loop {
             if self.match_chars("]]") {
                 self.eat_chars(2);
-                break Some(Token::String(s));
+                break Some(Token {
+                    kind: TokenKind::String(s),
+                    span: Span { start, end },
+                });
             }
             match self.eat_char() {
                 Some(sc) => s.push(sc),
@@ -218,6 +251,7 @@ impl Lexer {
     // [A-z][A-z0-9]
     fn identifier(&mut self) -> Option<Token> {
         let mut s = String::new();
+        let start = self.cursor;
 
         // TODO(sbdchd): this should handle the case where the ident starts with a letter.
         // Right now we just don't allow numbers in idents
@@ -233,35 +267,42 @@ impl Lexer {
                 _ => break,
             }
         }
-        match s.as_str() {
-            "false" => Some(Token::False),
-            "true" => Some(Token::True),
-            "nil" => Some(Token::Nil),
-            "not" => Some(Token::Not),
-            "for" => Some(Token::For),
-            "do" => Some(Token::Do),
-            "in" => Some(Token::In),
-            "function" => Some(Token::Function),
-            "break" => Some(Token::Break),
-            "return" => Some(Token::Return),
-            "while" => Some(Token::While),
-            "repeat" => Some(Token::Repeat),
-            "until" => Some(Token::Until),
-            "or" => Some(Token::Or),
-            "and" => Some(Token::And),
-            "goto" => Some(Token::Goto),
-            "end" => Some(Token::End),
-            "if" => Some(Token::If),
-            "then" => Some(Token::Then),
-            "elseif" => Some(Token::ElseIf),
-            "else" => Some(Token::Else),
-            "local" => Some(Token::Local),
-            _ => Some(Token::Ident(s)),
-        }
+        let end = self.cursor;
+
+        let span = Span { start, end };
+
+        let kind = match s.as_str() {
+            "false" => TokenKind::False,
+            "true" => TokenKind::True,
+            "nil" => TokenKind::Nil,
+            "not" => TokenKind::Not,
+            "for" => TokenKind::For,
+            "do" => TokenKind::Do,
+            "in" => TokenKind::In,
+            "function" => TokenKind::Function,
+            "break" => TokenKind::Break,
+            "return" => TokenKind::Return,
+            "while" => TokenKind::While,
+            "repeat" => TokenKind::Repeat,
+            "until" => TokenKind::Until,
+            "or" => TokenKind::Or,
+            "and" => TokenKind::And,
+            "goto" => TokenKind::Goto,
+            "end" => TokenKind::End,
+            "if" => TokenKind::If,
+            "then" => TokenKind::Then,
+            "elseif" => TokenKind::ElseIf,
+            "else" => TokenKind::Else,
+            "local" => TokenKind::Local,
+            _ => TokenKind::Ident(s),
+        };
+
+        Some(Token { kind, span })
     }
 
     // ^-?[0-9](\.[0-9])?
     fn number(&mut self) -> Option<Token> {
+        let start = self.cursor;
         // TODO(sbdchd): I think there are more formats. Check the reference.
         let mut s = String::new();
 
@@ -286,9 +327,20 @@ impl Lexer {
             }
         }
 
+        let span = Span {
+            start,
+            end: self.cursor,
+        };
+
         match s.parse() {
-            Ok(num) => Some(Token::Number(num)),
-            _ => Some(Token::Unknown(s)),
+            Ok(num) => Some(Token {
+                kind: TokenKind::Number(num),
+                span,
+            }),
+            _ => Some(Token {
+                kind: TokenKind::Unknown(s),
+                span,
+            }),
         }
     }
 }
@@ -299,34 +351,59 @@ impl Iterator for Lexer {
         if let Some("--[[") = &self.peek(4) {
             self.multi_line_comment()
         } else if let Some(c) = self.cur_char() {
+            let start = self.cursor;
             let next = self.next_char();
             match c {
                 '\'' | '"' => self.single_line_string(),
                 '[' if next == Some('[') => self.multi_line_string(),
                 '=' if next == Some('=') => {
                     self.eat_chars(2);
-                    Some(Token::EQ)
+                    let end = self.cursor;
+                    Some(Token {
+                        kind: TokenKind::EQ,
+                        span: Span { start, end },
+                    })
                 }
                 '=' => {
                     self.eat_char();
-                    Some(Token::Assign)
+                    let end = self.cursor;
+                    Some(Token {
+                        kind: TokenKind::Assign,
+                        span: Span { start, end },
+                    })
                 }
                 ';' => {
                     self.eat_char();
-                    Some(Token::SemiColon)
+                    let end = self.cursor;
+                    Some(Token {
+                        kind: TokenKind::SemiColon,
+                        span: Span { start, end },
+                    })
                 }
                 '[' => {
                     self.eat_char();
-                    Some(Token::LBracket)
+                    let end = self.cursor;
+                    Some(Token {
+                        kind: TokenKind::LBracket,
+                        span: Span { start, end },
+                    })
                 }
                 ']' => {
                     self.eat_char();
-                    Some(Token::RBracket)
+                    let end = self.cursor;
+                    Some(Token {
+                        kind: TokenKind::RBracket,
+                        span: Span { start, end },
+                    })
                 }
                 'A'...'Z' | 'a'...'z' | '_' => self.identifier(),
                 '\n' => {
                     self.eat_char();
-                    Some(Token::NewLine)
+                    let end = self.cursor;
+                    Some(Token {
+                        kind: TokenKind::NewLine,
+                        span: Span { start, end },
+                    })
                 }
                 ' ' => {
                     self.eat_char();
@@ -340,120 +417,236 @@ impl Iterator for Lexer {
                         return self.number();
                     }
                     self.eat_char();
-                    Some(Token::Minus)
+                    let end = self.cursor;
+                    Some(Token {
+                        kind: TokenKind::Minus,
+                        span: Span { start, end },
+                    })
                 }
                 '(' => {
                     self.eat_char();
-                    Some(Token::LParen)
+                    let end = self.cursor;
+                    Some(Token {
+                        kind: TokenKind::LParen,
+                        span: Span { start, end },
+                    })
                 }
                 ')' => {
                     self.eat_char();
-                    Some(Token::RParen)
+                    let end = self.cursor;
+                    Some(Token {
+                        kind: TokenKind::RParen,
+                        span: Span { start, end },
+                    })
                 }
                 '{' => {
                     self.eat_char();
-                    Some(Token::LCurly)
+                    let end = self.cursor;
+                    Some(Token {
+                        kind: TokenKind::LCurly,
+                        span: Span { start, end },
+                    })
                 }
                 '}' => {
                     self.eat_char();
-                    Some(Token::RCurly)
+                    let end = self.cursor;
+                    Some(Token {
+                        kind: TokenKind::RCurly,
+                        span: Span { start, end },
+                    })
                 }
                 ',' => {
                     self.eat_char();
-                    Some(Token::Comma)
+                    let end = self.cursor;
+                    Some(Token {
+                        kind: TokenKind::Comma,
+                        span: Span { start, end },
+                    })
                 }
                 '.' if next == Some('.') => {
                     self.eat_chars(2);
                     if self.cur_char() == Some('.') {
                         self.eat_char();
-                        Some(Token::Dots)
+                        let end = self.cursor;
+                        Some(Token {
+                            kind: TokenKind::Dots,
+                            span: Span { start, end },
+                        })
                     } else {
-                        Some(Token::Concat)
+                        let end = self.cursor;
+                        Some(Token {
+                            kind: TokenKind::Concat,
+                            span: Span { start, end },
+                        })
                     }
                 }
                 '.' => {
                     self.eat_char();
-                    Some(Token::Period)
+                    let end = self.cursor;
+                    Some(Token {
+                        kind: TokenKind::Period,
+                        span: Span { start, end },
+                    })
                 }
                 ':' if next == Some(':') => {
                     self.eat_chars(2);
-                    Some(Token::DBColon)
+                    let end = self.cursor;
+                    Some(Token {
+                        kind: TokenKind::DBColon,
+                        span: Span { start, end },
+                    })
                 }
                 ':' => {
                     self.eat_char();
-                    Some(Token::Colon)
+                    let end = self.cursor;
+                    Some(Token {
+                        kind: TokenKind::Colon,
+                        span: Span { start, end },
+                    })
                 }
                 '<' if next == Some('<') => {
                     self.eat_chars(2);
-                    Some(Token::SHL)
+                    let end = self.cursor;
+                    Some(Token {
+                        kind: TokenKind::SHL,
+                        span: Span { start, end },
+                    })
                 }
                 '<' if next == Some('=') => {
                     self.eat_chars(2);
-                    Some(Token::LTE)
+                    let end = self.cursor;
+                    Some(Token {
+                        kind: TokenKind::LTE,
+                        span: Span { start, end },
+                    })
                 }
                 '<' => {
                     self.eat_char();
-                    Some(Token::LT)
+                    let end = self.cursor;
+                    Some(Token {
+                        kind: TokenKind::LT,
+                        span: Span { start, end },
+                    })
                 }
                 '>' if next == Some('>') => {
                     self.eat_chars(2);
-                    Some(Token::SHR)
+                    let end = self.cursor;
+                    Some(Token {
+                        kind: TokenKind::SHR,
+                        span: Span { start, end },
+                    })
                 }
                 '>' if next == Some('=') => {
                     self.eat_chars(2);
-                    Some(Token::GTE)
+                    let end = self.cursor;
+                    Some(Token {
+                        kind: TokenKind::GTE,
+                        span: Span { start, end },
+                    })
                 }
                 '>' => {
                     self.eat_char();
-                    Some(Token::GT)
+                    let end = self.cursor;
+                    Some(Token {
+                        kind: TokenKind::GT,
+                        span: Span { start, end },
+                    })
                 }
                 '+' => {
                     self.eat_char();
-                    Some(Token::Plus)
+                    let end = self.cursor;
+                    Some(Token {
+                        kind: TokenKind::Plus,
+                        span: Span { start, end },
+                    })
                 }
                 '#' => {
                     self.eat_char();
-                    Some(Token::Hash)
+                    let end = self.cursor;
+                    Some(Token {
+                        kind: TokenKind::Hash,
+                        span: Span { start, end },
+                    })
                 }
                 '*' => {
                     self.eat_char();
-                    Some(Token::Mul)
+                    let end = self.cursor;
+                    Some(Token {
+                        kind: TokenKind::Mul,
+                        span: Span { start, end },
+                    })
                 }
                 '/' if next == Some('/') => {
                     self.eat_chars(2);
-                    Some(Token::IntDiv)
+                    let end = self.cursor;
+                    Some(Token {
+                        kind: TokenKind::IntDiv,
+                        span: Span { start, end },
+                    })
                 }
                 '/' => {
                     self.eat_char();
-                    Some(Token::Div)
+                    let end = self.cursor;
+                    Some(Token {
+                        kind: TokenKind::Div,
+                        span: Span { start, end },
+                    })
                 }
                 '%' => {
                     self.eat_char();
-                    Some(Token::Mod)
+                    let end = self.cursor;
+                    Some(Token {
+                        kind: TokenKind::Mod,
+                        span: Span { start, end },
+                    })
                 }
                 '^' => {
                     self.eat_char();
-                    Some(Token::Pow)
+                    let end = self.cursor;
+                    Some(Token {
+                        kind: TokenKind::Pow,
+                        span: Span { start, end },
+                    })
                 }
                 '&' => {
                     self.eat_char();
-                    Some(Token::BitAnd)
+                    let end = self.cursor;
+                    Some(Token {
+                        kind: TokenKind::BitAnd,
+                        span: Span { start, end },
+                    })
                 }
                 '|' => {
                     self.eat_char();
-                    Some(Token::BitOr)
+                    let end = self.cursor;
+                    Some(Token {
+                        kind: TokenKind::BitOr,
+                        span: Span { start, end },
+                    })
                 }
                 '~' if next == Some('=') => {
                     self.eat_chars(2);
-                    Some(Token::NEQ)
+                    let end = self.cursor;
+                    Some(Token {
+                        kind: TokenKind::NEQ,
+                        span: Span { start, end },
+                    })
                 }
                 '~' => {
                     self.eat_char();
-                    Some(Token::BitXor)
+                    let end = self.cursor;
+                    Some(Token {
+                        kind: TokenKind::BitXor,
+                        span: Span { start, end },
+                    })
                 }
                 unknown => {
                     self.eat_char();
-                    Some(Token::Unknown(unknown.to_string()))
+                    let end = self.cursor;
+                    Some(Token {
+                        kind: TokenKind::Unknown(unknown.to_string()),
+                        span: Span { start, end },
+                    })
                 }
             }
         } else {
@@ -465,6 +658,8 @@ impl Iterator for Lexer {
 #[cfg(test)]
 mod test_lex {
     use super::*;
+    use insta::assert_debug_snapshot_matches;
+    use pretty_assertions::assert_eq;
 
     #[test]
     fn whitespace() {
@@ -484,9 +679,12 @@ mod test_lex {
 
         assert_eq!(
             lex.next(),
-            Some(Token::Comment(Comment::SingleLine(String::from(
-                " This is an example lua comment"
-            ))))
+            Some(Token {
+                kind: TokenKind::Comment(Comment::SingleLine(String::from(
+                    " This is an example lua comment"
+                ))),
+                span: Span { start: 0, end: 34 }
+            })
         );
     }
 
@@ -498,9 +696,10 @@ mod test_lex {
 
         assert_eq!(
             lex.next(),
-            Some(Token::Comment(Comment::MultiLine(String::from(
-                " multi-line comment "
-            ))))
+            Some(Token {
+                kind: TokenKind::Comment(Comment::MultiLine(String::from(" multi-line comment "))),
+                span: Span { start: 0, end: 28 }
+            })
         )
     }
 
@@ -510,14 +709,20 @@ mod test_lex {
         let mut lex = Lexer::new(single_quote);
         assert_eq!(
             lex.next(),
-            Some(Token::String(String::from("example string")))
+            Some(Token {
+                kind: TokenKind::String(String::from("example string")),
+                span: Span { start: 0, end: 16 }
+            })
         );
 
         let double_quote = r#""example string""#;
         let mut lex = Lexer::new(double_quote);
         assert_eq!(
             lex.next(),
-            Some(Token::String(String::from("example string")))
+            Some(Token {
+                kind: TokenKind::String(String::from("example string")),
+                span: Span { start: 0, end: 16 }
+            })
         );
 
         let bad_new_line = r#""example string
@@ -533,24 +738,18 @@ mod test_lex {
         let mut lex = Lexer::new(multi_line);
         assert_eq!(
             lex.next(),
-            Some(Token::String(String::from(" This is a multi-line string ")))
+            Some(Token {
+                kind: TokenKind::String(String::from(" This is a multi-line string ")),
+                span: Span { start: 0, end: 2 }
+            })
         );
     }
 
     #[test]
     fn ident_with_bracket() {
         let p = "foo[1]";
-
         let actual: Vec<_> = Lexer::new(p).collect();
-        assert_eq!(
-            actual,
-            vec![
-                Token::Ident(String::from("foo")),
-                Token::LBracket,
-                Token::Number(1f64),
-                Token::RBracket,
-            ]
-        );
+        assert_debug_snapshot_matches!(actual);
     }
 
     #[test]
@@ -560,7 +759,20 @@ mod test_lex {
 
         assert_eq!(
             actual,
-            vec![Token::Ident(String::from("x")), Token::Assign, Token::Nil,]
+            vec![
+                Token {
+                    kind: TokenKind::Ident(String::from("x")),
+                    span: Span { start: 0, end: 1 }
+                },
+                Token {
+                    kind: TokenKind::Assign,
+                    span: Span { start: 2, end: 3 }
+                },
+                Token {
+                    kind: TokenKind::Nil,
+                    span: Span { start: 3, end: 6 }
+                },
+            ]
         );
 
         let p = r#"local _x = 1"#;
@@ -569,10 +781,22 @@ mod test_lex {
         assert_eq!(
             actual,
             vec![
-                Token::Local,
-                Token::Ident(String::from("_x")),
-                Token::Assign,
-                Token::Number(1f64),
+                Token {
+                    kind: TokenKind::Local,
+                    span: Span { start: 0, end: 5 }
+                },
+                Token {
+                    kind: TokenKind::Ident(String::from("_x")),
+                    span: Span { start: 6, end: 8 }
+                },
+                Token {
+                    kind: TokenKind::Assign,
+                    span: Span { start: 9, end: 10 }
+                },
+                Token {
+                    kind: TokenKind::Number(1f64),
+                    span: Span { start: 11, end: 12 }
+                },
             ]
         );
     }
@@ -589,55 +813,7 @@ mod test_lex {
             x = 2 // 3
         "#;
         let actual: Vec<_> = Lexer::new(p).collect();
-
-        assert_eq!(
-            actual,
-            vec![
-                Token::NewLine,
-                Token::Ident(String::from("x")),
-                Token::Assign,
-                Token::Number(2f64),
-                Token::Plus,
-                Token::Number(3f64),
-                Token::NewLine,
-                Token::Ident(String::from("x")),
-                Token::Assign,
-                Token::Number(2f64),
-                Token::Minus,
-                Token::Number(3f64),
-                Token::NewLine,
-                Token::Ident(String::from("x")),
-                Token::Assign,
-                Token::Number(2f64),
-                Token::Mul,
-                Token::Number(3f64),
-                Token::NewLine,
-                Token::Ident(String::from("x")),
-                Token::Assign,
-                Token::Number(2f64),
-                Token::Div,
-                Token::Number(3f64),
-                Token::NewLine,
-                Token::Ident(String::from("x")),
-                Token::Assign,
-                Token::Number(2f64),
-                Token::Mod,
-                Token::Number(3f64),
-                Token::NewLine,
-                Token::Ident(String::from("x")),
-                Token::Assign,
-                Token::Number(2f64),
-                Token::Pow,
-                Token::Number(3f64),
-                Token::NewLine,
-                Token::Ident(String::from("x")),
-                Token::Assign,
-                Token::Number(2f64),
-                Token::IntDiv,
-                Token::Number(3f64),
-                Token::NewLine,
-            ]
-        );
+        assert_debug_snapshot_matches!(actual);
     }
 
     #[test]
@@ -648,23 +824,7 @@ mod test_lex {
         end"#;
 
         let actual: Vec<_> = Lexer::new(p).collect();
-
-        assert_eq!(
-            actual,
-            vec![
-                Token::NewLine,
-                Token::Function,
-                Token::Ident(String::from("foo")),
-                Token::LParen,
-                Token::Dots,
-                Token::RParen,
-                Token::NewLine,
-                Token::Return,
-                Token::Dots,
-                Token::NewLine,
-                Token::End,
-            ]
-        )
+        assert_debug_snapshot_matches!(actual);
     }
 
     #[test]
@@ -675,70 +835,16 @@ mod test_lex {
         // >>: right shift
         // <<: left shift
         // ~: unary bitwise NOT
-
         let p = r#"x = (2 & 3) | (~3) | (5 >> 2) | (5 << 2) | (4 ~ 4)"#;
         let actual: Vec<_> = Lexer::new(p).collect();
-
-        assert_eq!(
-            actual,
-            vec![
-                Token::Ident(String::from("x")),
-                Token::Assign,
-                Token::LParen,
-                Token::Number(2f64),
-                Token::BitAnd,
-                Token::Number(3f64),
-                Token::RParen,
-                Token::BitOr,
-                Token::LParen,
-                Token::BitXor,
-                Token::Number(3f64),
-                Token::RParen,
-                Token::BitOr,
-                Token::LParen,
-                Token::Number(5f64),
-                Token::SHR,
-                Token::Number(2f64),
-                Token::RParen,
-                Token::BitOr,
-                Token::LParen,
-                Token::Number(5f64),
-                Token::SHL,
-                Token::Number(2f64),
-                Token::RParen,
-                Token::BitOr,
-                Token::LParen,
-                Token::Number(4f64),
-                Token::BitXor,
-                Token::Number(4f64),
-                Token::RParen,
-            ]
-        )
+        assert_debug_snapshot_matches!(actual);
     }
 
     #[test]
     fn equality() {
         let p = r#"foo ~= bar == bizz >= 4 > 3 < 10 <= 2 "#;
         let actual: Vec<_> = Lexer::new(p).collect();
-
-        assert_eq!(
-            actual,
-            vec![
-                Token::Ident(String::from("foo")),
-                Token::NEQ,
-                Token::Ident(String::from("bar")),
-                Token::EQ,
-                Token::Ident(String::from("bizz")),
-                Token::GTE,
-                Token::Number(4f64),
-                Token::GT,
-                Token::Number(3f64),
-                Token::LT,
-                Token::Number(10f64),
-                Token::LTE,
-                Token::Number(2f64),
-            ]
-        )
+        assert_debug_snapshot_matches!(actual);
     }
 
     #[test]
@@ -750,75 +856,22 @@ mod test_lex {
             ::done::"#;
 
         let actual: Vec<_> = Lexer::new(p).collect();
-
-        assert_eq!(
-            actual,
-            vec![
-                Token::NewLine,
-                Token::For,
-                Token::Ident(String::from("z")),
-                Token::Assign,
-                Token::Number(1f64),
-                Token::Comma,
-                Token::Number(10f64),
-                Token::Do,
-                Token::NewLine,
-                Token::Goto,
-                Token::Ident(String::from("done")),
-                Token::NewLine,
-                Token::End,
-                Token::NewLine,
-                Token::DBColon,
-                Token::Ident(String::from("done")),
-                Token::DBColon,
-            ]
-        )
+        assert_debug_snapshot_matches!(actual);
     }
 
     #[test]
     fn for_in_pairs() {
         let p = r#"for k,v in pairs(t) do print(k, v) end"#;
         let actual: Vec<_> = Lexer::new(p).collect();
-        assert_eq!(
-            actual,
-            vec![
-                Token::For,
-                Token::Ident(String::from("k")),
-                Token::Comma,
-                Token::Ident(String::from("v")),
-                Token::In,
-                Token::Ident(String::from("pairs")),
-                Token::LParen,
-                Token::Ident(String::from("t")),
-                Token::RParen,
-                Token::Do,
-                Token::Ident(String::from("print")),
-                Token::LParen,
-                Token::Ident(String::from("k")),
-                Token::Comma,
-                Token::Ident(String::from("v")),
-                Token::RParen,
-                Token::End,
-            ]
-        )
+        assert_debug_snapshot_matches!(actual);
     }
 
     #[test]
     fn local_var_assignment() {
         let nil_assignment = r#"local x=nil"#;
         let lex = Lexer::new(nil_assignment);
-
         let actual: Vec<_> = lex.collect();
-
-        assert_eq!(
-            actual,
-            vec![
-                Token::Local,
-                Token::Ident(String::from("x")),
-                Token::Assign,
-                Token::Nil,
-            ]
-        );
+        assert_debug_snapshot_matches!(actual);
     }
 
     #[test]
@@ -826,59 +879,24 @@ mod test_lex {
         let s = r#"x = 15"#;
         let lex = Lexer::new(s);
         let actual: Vec<_> = lex.collect();
-        assert_eq!(
-            actual,
-            vec![
-                Token::Ident(String::from("x")),
-                Token::Assign,
-                Token::Number(15f64)
-            ]
-        );
+        assert_debug_snapshot_matches!(actual);
 
         let s = r#"x = -15"#;
         let lex = Lexer::new(s);
         let actual: Vec<_> = lex.collect();
-        assert_eq!(
-            actual,
-            vec![
-                Token::Ident(String::from("x")),
-                Token::Assign,
-                Token::Number(-15f64)
-            ]
-        );
+        assert_debug_snapshot_matches!(actual);
 
         let s = r#"x = 1.50"#;
         let actual: Vec<_> = Lexer::new(s).collect();
-        assert_eq!(
-            actual,
-            vec![
-                Token::Ident(String::from("x")),
-                Token::Assign,
-                Token::Number(1.5f64)
-            ]
-        );
+        assert_debug_snapshot_matches!(actual);
 
         let s = r#"x = .5"#;
         let actual: Vec<_> = Lexer::new(s).collect();
-        assert_eq!(
-            actual,
-            vec![
-                Token::Ident(String::from("x")),
-                Token::Assign,
-                Token::Number(0.5f64)
-            ]
-        );
+        assert_debug_snapshot_matches!(actual);
 
         let s = r#"x = 5.40."#;
         let actual: Vec<_> = Lexer::new(s).collect();
-        assert_eq!(
-            actual,
-            vec![
-                Token::Ident(String::from("x")),
-                Token::Assign,
-                Token::Unknown(String::from("5.40."))
-            ]
-        );
+        assert_debug_snapshot_matches!(actual);
     }
 
     #[test]
@@ -888,7 +906,20 @@ mod test_lex {
         let actual: Vec<_> = lex.collect();
         assert_eq!(
             actual,
-            vec![Token::Ident(String::from("x")), Token::Assign, Token::Nil]
+            vec![
+                Token {
+                    kind: TokenKind::Ident(String::from("x")),
+                    span: Span { start: 0, end: 1 }
+                },
+                Token {
+                    kind: TokenKind::Assign,
+                    span: Span { start: 2, end: 3 }
+                },
+                Token {
+                    kind: TokenKind::Nil,
+                    span: Span { start: 4, end: 7 }
+                },
+            ]
         );
 
         let string_assignment = r#"x = 'foo'"#;
@@ -898,9 +929,18 @@ mod test_lex {
         assert_eq!(
             actual,
             vec![
-                Token::Ident(String::from("x")),
-                Token::Assign,
-                Token::String(String::from("foo"))
+                Token {
+                    kind: TokenKind::Ident(String::from("x")),
+                    span: Span { start: 0, end: 1 }
+                },
+                Token {
+                    kind: TokenKind::Assign,
+                    span: Span { start: 2, end: 3 }
+                },
+                Token {
+                    kind: TokenKind::String(String::from("foo")),
+                    span: Span { start: 4, end: 9 }
+                },
             ]
         );
 
@@ -910,7 +950,20 @@ mod test_lex {
 
         assert_eq!(
             actual,
-            vec![Token::Ident(String::from("x")), Token::Assign, Token::False]
+            vec![
+                Token {
+                    kind: TokenKind::Ident(String::from("x")),
+                    span: Span { start: 0, end: 1 }
+                },
+                Token {
+                    kind: TokenKind::Assign,
+                    span: Span { start: 2, end: 3 }
+                },
+                Token {
+                    kind: TokenKind::False,
+                    span: Span { start: 4, end: 9 }
+                },
+            ]
         );
 
         let var_assignment = r#"x = y"#;
@@ -919,9 +972,18 @@ mod test_lex {
         assert_eq!(
             actual,
             vec![
-                Token::Ident(String::from("x")),
-                Token::Assign,
-                Token::Ident(String::from("y"))
+                Token {
+                    kind: TokenKind::Ident(String::from("x")),
+                    span: Span { start: 0, end: 1 }
+                },
+                Token {
+                    kind: TokenKind::Assign,
+                    span: Span { start: 2, end: 3 }
+                },
+                Token {
+                    kind: TokenKind::Ident(String::from("y")),
+                    span: Span { start: 4, end: 5 }
+                },
             ]
         );
     }
@@ -936,27 +998,7 @@ mod test_lex {
 
         let lex = Lexer::new(loop_text);
         let actual: Vec<_> = lex.collect();
-        assert_eq!(
-            actual,
-            vec![
-                Token::NewLine,
-                Token::While,
-                Token::Ident(String::from("x")),
-                Token::LT,
-                Token::Number(100f64),
-                Token::Do,
-                Token::NewLine,
-                Token::Ident(String::from("x")),
-                Token::Assign,
-                Token::Ident(String::from("x")),
-                Token::Plus,
-                Token::Number(1f64),
-                Token::NewLine,
-                Token::Break,
-                Token::NewLine,
-                Token::End,
-            ]
-        )
+        assert_debug_snapshot_matches!(actual);
     }
 
     #[test]
@@ -973,63 +1015,14 @@ mod test_lex {
 
         let lex = Lexer::new(loop_text);
         let actual: Vec<_> = lex.collect();
-        assert_eq!(
-            actual,
-            vec![
-                Token::NewLine,
-                Token::If,
-                Token::Ident(String::from("x")),
-                Token::EQ,
-                Token::Number(1f64),
-                Token::Then,
-                Token::NewLine,
-                Token::Ident(String::from("x")),
-                Token::Assign,
-                Token::Ident(String::from("x")),
-                Token::Plus,
-                Token::Number(1f64),
-                Token::NewLine,
-                Token::ElseIf,
-                Token::Ident(String::from("x")),
-                Token::GT,
-                Token::Number(5f64),
-                Token::Then,
-                Token::NewLine,
-                Token::Ident(String::from("x")),
-                Token::Assign,
-                Token::Number(-1f64),
-                Token::NewLine,
-                Token::Else,
-                Token::NewLine,
-                Token::Ident(String::from("x")),
-                Token::Assign,
-                Token::Number(0f64),
-                Token::NewLine,
-                Token::End,
-                Token::NewLine,
-            ]
-        )
+        assert_debug_snapshot_matches!(actual);
     }
 
     #[test]
     fn method_call() {
         let p = r#"io.write("foo", "\n")"#;
-
         let actual: Vec<_> = Lexer::new(p).collect();
-
-        assert_eq!(
-            actual,
-            vec![
-                Token::Ident(String::from("io")),
-                Token::Period,
-                Token::Ident(String::from("write")),
-                Token::LParen,
-                Token::String(String::from("foo")),
-                Token::Comma,
-                Token::String(String::from(r"\n")),
-                Token::RParen,
-            ]
-        )
+        assert_debug_snapshot_matches!(actual);
     }
 
     #[test]
@@ -1041,9 +1034,18 @@ mod test_lex {
         assert_eq!(
             actual,
             vec![
-                Token::String(String::from("foo")),
-                Token::Concat,
-                Token::Ident(String::from("bar")),
+                Token {
+                    kind: TokenKind::String(String::from("foo")),
+                    span: Span { start: 0, end: 5 }
+                },
+                Token {
+                    kind: TokenKind::Concat,
+                    span: Span { start: 6, end: 8 }
+                },
+                Token {
+                    kind: TokenKind::Ident(String::from("bar")),
+                    span: Span { start: 9, end: 12 }
+                },
             ]
         )
     }
@@ -1053,28 +1055,26 @@ mod test_lex {
         let p = r#"not true"#;
 
         let actual: Vec<_> = Lexer::new(p).collect();
-
-        assert_eq!(actual, vec![Token::Not, Token::True,])
+        assert_eq!(
+            actual,
+            vec![
+                Token {
+                    kind: TokenKind::Not,
+                    span: Span { start: 0, end: 3 }
+                },
+                Token {
+                    kind: TokenKind::True,
+                    span: Span { start: 4, end: 8 }
+                },
+            ]
+        )
     }
 
     #[test]
     fn bool_expressions() {
         let p = r#"foo = true and 'bar' or 'buzz'"#;
-
         let actual: Vec<_> = Lexer::new(p).collect();
-
-        assert_eq!(
-            actual,
-            vec![
-                Token::Ident(String::from("foo")),
-                Token::Assign,
-                Token::True,
-                Token::And,
-                Token::String(String::from("bar")),
-                Token::Or,
-                Token::String(String::from("buzz"))
-            ]
-        )
+        assert_debug_snapshot_matches!(actual);
     }
 
     #[test]
@@ -1086,32 +1086,7 @@ mod test_lex {
         end"#;
 
         let actual: Vec<_> = Lexer::new(p).collect();
-
-        assert_eq!(
-            actual,
-            vec![
-                Token::NewLine,
-                Token::Ident(String::from("sum")),
-                Token::Assign,
-                Token::Number(0f64),
-                Token::NewLine,
-                Token::For,
-                Token::Ident(String::from("i")),
-                Token::Assign,
-                Token::Number(1f64),
-                Token::Comma,
-                Token::Number(100f64),
-                Token::Do,
-                Token::NewLine,
-                Token::Ident(String::from("sum")),
-                Token::Assign,
-                Token::Ident(String::from("sum")),
-                Token::Plus,
-                Token::Ident(String::from("i")),
-                Token::NewLine,
-                Token::End,
-            ]
-        )
+        assert_debug_snapshot_matches!(actual);
     }
 
     #[test]
@@ -1124,55 +1099,14 @@ mod test_lex {
         until n == 0"#;
 
         let actual: Vec<_> = Lexer::new(p).collect();
-
-        assert_eq!(
-            actual,
-            vec![
-                Token::NewLine,
-                Token::Ident(String::from("n")),
-                Token::Assign,
-                Token::Number(100f64),
-                Token::NewLine,
-                Token::Repeat,
-                Token::NewLine,
-                Token::Ident(String::from("print")),
-                Token::LParen,
-                Token::Ident(String::from("n")),
-                Token::RParen,
-                Token::NewLine,
-                Token::Ident(String::from("n")),
-                Token::Assign,
-                Token::Ident(String::from("n")),
-                Token::Minus,
-                Token::Number(1f64),
-                Token::NewLine,
-                Token::Until,
-                Token::Ident(String::from("n")),
-                Token::EQ,
-                Token::Number(0f64),
-            ]
-        )
+        assert_debug_snapshot_matches!(actual);
     }
 
     #[test]
     fn semi_colon() {
         let p = r#"foo = 'bar'; buzz = 'bot';"#;
-
         let actual: Vec<_> = Lexer::new(p).collect();
-
-        assert_eq!(
-            actual,
-            vec![
-                Token::Ident(String::from("foo")),
-                Token::Assign,
-                Token::String(String::from("bar")),
-                Token::SemiColon,
-                Token::Ident(String::from("buzz")),
-                Token::Assign,
-                Token::String(String::from("bot")),
-                Token::SemiColon,
-            ]
-        )
+        assert_debug_snapshot_matches!(actual);
     }
 
     #[test]
@@ -1184,44 +1118,7 @@ mod test_lex {
         end"#;
 
         let actual: Vec<_> = Lexer::new(p).collect();
-
-        assert_eq!(
-            actual,
-            vec![
-                Token::NewLine,
-                Token::Function,
-                Token::Ident(String::from("fib")),
-                Token::LParen,
-                Token::Ident(String::from("n")),
-                Token::RParen,
-                Token::NewLine,
-                Token::If,
-                Token::Ident(String::from("n")),
-                Token::LT,
-                Token::Number(2f64),
-                Token::Then,
-                Token::Return,
-                Token::Ident(String::from("n")),
-                Token::End,
-                Token::NewLine,
-                Token::Return,
-                Token::Ident(String::from("fib")),
-                Token::LParen,
-                Token::Ident(String::from("n")),
-                Token::Minus,
-                Token::Number(2f64),
-                Token::RParen,
-                Token::Plus,
-                Token::Ident(String::from("fib")),
-                Token::LParen,
-                Token::Ident(String::from("n")),
-                Token::Minus,
-                Token::Number(1f64),
-                Token::RParen,
-                Token::NewLine,
-                Token::End,
-            ]
-        )
+        assert_debug_snapshot_matches!(actual);
     }
 
     #[test]
@@ -1233,10 +1130,22 @@ mod test_lex {
         assert_eq!(
             actual,
             vec![
-                Token::Ident(String::from("x")),
-                Token::Assign,
-                Token::LCurly,
-                Token::RCurly,
+                Token {
+                    kind: TokenKind::Ident(String::from("x")),
+                    span: Span { start: 0, end: 1 }
+                },
+                Token {
+                    kind: TokenKind::Assign,
+                    span: Span { start: 2, end: 3 }
+                },
+                Token {
+                    kind: TokenKind::LCurly,
+                    span: Span { start: 4, end: 5 }
+                },
+                Token {
+                    kind: TokenKind::RCurly,
+                    span: Span { start: 5, end: 6 }
+                },
             ]
         );
     }
@@ -1246,23 +1155,7 @@ mod test_lex {
         let p = r#"x = {foo = 'foo', bar = false}"#;
 
         let actual: Vec<_> = Lexer::new(p).collect();
-
-        assert_eq!(
-            actual,
-            vec![
-                Token::Ident(String::from("x")),
-                Token::Assign,
-                Token::LCurly,
-                Token::Ident(String::from("foo")),
-                Token::Assign,
-                Token::String(String::from("foo")),
-                Token::Comma,
-                Token::Ident(String::from("bar")),
-                Token::Assign,
-                Token::False,
-                Token::RCurly
-            ]
-        );
+        assert_debug_snapshot_matches!(actual);
     }
 
     #[test]
@@ -1270,34 +1163,7 @@ mod test_lex {
         let p = r#"x = {['bar'] = 'bar', [1.5] = 'foo', [{}] = false}"#;
 
         let actual: Vec<_> = Lexer::new(p).collect();
-
-        assert_eq!(
-            actual,
-            vec![
-                Token::Ident(String::from("x")),
-                Token::Assign,
-                Token::LCurly,
-                Token::LBracket,
-                Token::String(String::from("bar")),
-                Token::RBracket,
-                Token::Assign,
-                Token::String(String::from("bar")),
-                Token::Comma,
-                Token::LBracket,
-                Token::Number(1.5),
-                Token::RBracket,
-                Token::Assign,
-                Token::String(String::from("foo")),
-                Token::Comma,
-                Token::LBracket,
-                Token::LCurly,
-                Token::RCurly,
-                Token::RBracket,
-                Token::Assign,
-                Token::False,
-                Token::RCurly,
-            ]
-        );
+        assert_debug_snapshot_matches!(actual);
     }
 
     #[test]
@@ -1307,23 +1173,7 @@ mod test_lex {
         print(#a)"#;
 
         let actual: Vec<_> = Lexer::new(p).collect();
-
-        assert_eq!(
-            actual,
-            vec![
-                Token::NewLine,
-                Token::Local,
-                Token::Ident(String::from("a")),
-                Token::Assign,
-                Token::Number(10f64),
-                Token::NewLine,
-                Token::Ident(String::from("print")),
-                Token::LParen,
-                Token::Hash,
-                Token::Ident(String::from("a")),
-                Token::RParen,
-            ]
-        )
+        assert_debug_snapshot_matches!(actual);
     }
 
     #[test]
@@ -1346,81 +1196,7 @@ mod test_lex {
         "#;
 
         let actual: Vec<_> = Lexer::new(p).collect();
-
-        assert_eq!(
-            actual,
-            vec![
-                Token::NewLine,
-                Token::Ident(String::from("Foo")),
-                Token::Assign,
-                Token::LCurly,
-                Token::RCurly,
-                Token::NewLine,
-                Token::NewLine,
-                Token::Function,
-                Token::Ident(String::from("Foo")),
-                Token::Colon,
-                Token::Ident(String::from("new")),
-                Token::LParen,
-                Token::RParen,
-                Token::NewLine,
-                Token::Local,
-                Token::Ident(String::from("obj")),
-                Token::Assign,
-                Token::LCurly,
-                Token::Ident(String::from("someData")),
-                Token::Assign,
-                Token::String(String::from("foo!")),
-                Token::RCurly,
-                Token::NewLine,
-                Token::Ident(String::from("self")),
-                Token::Period,
-                Token::Ident(String::from("__index")),
-                Token::Assign,
-                Token::Ident(String::from("self")),
-                Token::NewLine,
-                Token::Return,
-                Token::Ident(String::from("setmetatable")),
-                Token::LParen,
-                Token::Ident(String::from("obj")),
-                Token::Comma,
-                Token::Ident(String::from("self")),
-                Token::RParen,
-                Token::NewLine,
-                Token::End,
-                Token::NewLine,
-                Token::NewLine,
-                Token::Function,
-                Token::Ident(String::from("Foo")),
-                Token::Colon,
-                Token::Ident(String::from("bar")),
-                Token::LParen,
-                Token::RParen,
-                Token::NewLine,
-                Token::Return,
-                Token::Ident(String::from("self")),
-                Token::Period,
-                Token::Ident(String::from("someData")),
-                Token::NewLine,
-                Token::End,
-                Token::NewLine,
-                Token::NewLine,
-                Token::Ident(String::from("f")),
-                Token::Assign,
-                Token::Ident(String::from("Foo")),
-                Token::Colon,
-                Token::Ident(String::from("new")),
-                Token::LParen,
-                Token::RParen,
-                Token::NewLine,
-                Token::Ident(String::from("f")),
-                Token::Colon,
-                Token::Ident(String::from("bar")),
-                Token::LParen,
-                Token::RParen,
-                Token::NewLine,
-            ]
-        )
+        assert_debug_snapshot_matches!(actual);
     }
 
 }

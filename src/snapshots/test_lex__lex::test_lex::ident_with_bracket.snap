@@ -1,0 +1,40 @@
+---
+created: "2019-03-08T07:57:40.802538Z"
+creator: insta@0.7.1
+source: src/lex.rs
+expression: actual
+---
+[
+    Token {
+        kind: Ident(
+            "foo"
+        ),
+        span: Span {
+            start: 0,
+            end: 3
+        }
+    },
+    Token {
+        kind: LBracket,
+        span: Span {
+            start: 3,
+            end: 4
+        }
+    },
+    Token {
+        kind: Number(
+            1.0
+        ),
+        span: Span {
+            start: 4,
+            end: 5
+        }
+    },
+    Token {
+        kind: RBracket,
+        span: Span {
+            start: 5,
+            end: 6
+        }
+    }
+]

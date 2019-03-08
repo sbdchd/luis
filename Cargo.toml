@@ -9,3 +9,7 @@ repository = "https://github.com/sbdchd/luis"
 edition = "2018"
 
 [dependencies]
+
+[dev-dependencies]
+pretty_assertions = "*"
+insta = "0.7.1"

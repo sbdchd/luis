@@ -1,0 +1,130 @@
+---
+created: "2019-03-08T07:51:16.701955Z"
+creator: insta@0.7.1
+source: src/lex.rs
+expression: actual
+---
+[
+    Token {
+        kind: NewLine,
+        span: Span {
+            start: 0,
+            end: 1
+        }
+    },
+    Token {
+        kind: While,
+        span: Span {
+            start: 9,
+            end: 14
+        }
+    },
+    Token {
+        kind: Ident(
+            "x"
+        ),
+        span: Span {
+            start: 15,
+            end: 16
+        }
+    },
+    Token {
+        kind: LT,
+        span: Span {
+            start: 17,
+            end: 18
+        }
+    },
+    Token {
+        kind: Number(
+            100.0
+        ),
+        span: Span {
+            start: 19,
+            end: 22
+        }
+    },
+    Token {
+        kind: Do,
+        span: Span {
+            start: 23,
+            end: 25
+        }
+    },
+    Token {
+        kind: NewLine,
+        span: Span {
+            start: 25,
+            end: 26
+        }
+    },
+    Token {
+        kind: Ident(
+            "x"
+        ),
+        span: Span {
+            start: 38,
+            end: 39
+        }
+    },
+    Token {
+        kind: Assign,
+        span: Span {
+            start: 40,
+            end: 41
+        }
+    },
+    Token {
+        kind: Ident(
+            "x"
+        ),
+        span: Span {
+            start: 42,
+            end: 43
+        }
+    },
+    Token {
+        kind: Plus,
+        span: Span {
+            start: 44,
+            end: 45
+        }
+    },
+    Token {
+        kind: Number(
+            1.0
+        ),
+        span: Span {
+            start: 46,
+            end: 47
+        }
+    },
+    Token {
+        kind: NewLine,
+        span: Span {
+            start: 47,
+            end: 48
+        }
+    },
+    Token {
+        kind: Break,
+        span: Span {
+            start: 60,
+            end: 65
+        }
+    },
+    Token {
+        kind: NewLine,
+        span: Span {
+            start: 65,
+            end: 66
+        }
+    },
+    Token {
+        kind: End,
+        span: Span {
+            start: 74,
+            end: 77
+        }
+    }
+]

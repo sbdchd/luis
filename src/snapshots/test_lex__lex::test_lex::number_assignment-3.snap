@@ -1,0 +1,33 @@
+---
+created: "2019-03-08T07:59:46.736171Z"
+creator: insta@0.7.1
+source: src/lex.rs
+expression: actual
+---
+[
+    Token {
+        kind: Ident(
+            "x"
+        ),
+        span: Span {
+            start: 0,
+            end: 1
+        }
+    },
+    Token {
+        kind: Assign,
+        span: Span {
+            start: 2,
+            end: 3
+        }
+    },
+    Token {
+        kind: Number(
+            1.5
+        ),
+        span: Span {
+            start: 4,
+            end: 8
+        }
+    }
+]

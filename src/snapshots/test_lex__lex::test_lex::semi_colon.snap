@@ -1,0 +1,72 @@
+---
+created: "2019-03-08T07:54:13.597900Z"
+creator: insta@0.7.1
+source: src/lex.rs
+expression: actual
+---
+[
+    Token {
+        kind: Ident(
+            "foo"
+        ),
+        span: Span {
+            start: 0,
+            end: 3
+        }
+    },
+    Token {
+        kind: Assign,
+        span: Span {
+            start: 4,
+            end: 5
+        }
+    },
+    Token {
+        kind: String(
+            "bar"
+        ),
+        span: Span {
+            start: 6,
+            end: 11
+        }
+    },
+    Token {
+        kind: SemiColon,
+        span: Span {
+            start: 11,
+            end: 12
+        }
+    },
+    Token {
+        kind: Ident(
+            "buzz"
+        ),
+        span: Span {
+            start: 13,
+            end: 17
+        }
+    },
+    Token {
+        kind: Assign,
+        span: Span {
+            start: 18,
+            end: 19
+        }
+    },
+    Token {
+        kind: String(
+            "bot"
+        ),
+        span: Span {
+            start: 20,
+            end: 25
+        }
+    },
+    Token {
+        kind: SemiColon,
+        span: Span {
+            start: 25,
+            end: 26
+        }
+    }
+]

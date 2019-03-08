@@ -1,26 +1,38 @@
 use crate::ast::*;
-use crate::iter::{AssertNextIterator, ForwardBackwardIterator, PeekableIterator, TokenIter};
-use crate::lex::{Lexer, Token};
+use crate::iter::{ForwardBackwardIterator, PeekableIterator, TokenIter};
+use crate::lex::{Lexer, Token, TokenKind};
 use std;
 
 type Result<T> = std::result::Result<T, ()>;
+
+fn to_kind(tk: &Token) -> TokenKind {
+    tk.kind.clone()
+}
 
 /// parse a given blob of lua text
 pub fn parse(text: &str) -> Result<Block> {
     let tokens: Vec<_> = Lexer::new(text)
         .filter(|t| match t {
-            Token::Comment(_) => false,
+            Token {
+                kind: TokenKind::Comment(_),
+                ..
+            } => false,
             _ => true,
-        }).collect();
+        })
+        .collect();
     let mut tokens = TokenIter::new(&tokens);
     parse_block(&mut tokens)
 }
 
 /// label ::= ‘::’ Name ‘::’
 fn parse_label(tokens: &mut TokenIter<Token>) -> Result<Name> {
-    tokens.assert_next(&Token::DBColon)?;
-    if let Some(Token::Ident(ident)) = tokens.next() {
-        tokens.assert_next(&Token::DBColon)?;
+    tokens.assert_next(&TokenKind::DBColon)?;
+    if let Some(Token {
+        kind: TokenKind::Ident(ident),
+        ..
+    }) = tokens.next()
+    {
+        tokens.assert_next(&TokenKind::DBColon)?;
 
         Ok(Name(ident.to_string()))
     } else {
@@ -32,25 +44,38 @@ fn parse_label(tokens: &mut TokenIter<Token>) -> Result<Name> {
 fn parse_funcname(tokens: &mut TokenIter<Token>) -> Result<FuncName> {
     let first_name = tokens.next();
     let first_name = match first_name {
-        Some(Token::Ident(first_name)) => first_name,
+        Some(Token {
+            kind: TokenKind::Ident(first_name),
+            ..
+        }) => first_name,
         _ => return Err(()),
     };
     let mut path = vec![Name(first_name.clone())];
     // if next token is period then loop
-    while tokens.peek() == Some(&&Token::Period) {
+    while tokens.peek().map(to_kind) == Some(TokenKind::Period) {
         tokens.next();
         match tokens.next() {
-            Some(&Token::Ident(ref content)) => {
+            Some(Token {
+                kind: TokenKind::Ident(ref content),
+                ..
+            }) => {
                 path.push(Name(content.clone()));
             }
             _ => return Err(()),
         }
     }
     let mut method: Option<Name> = None;
-    if let Some(Token::Colon) = tokens.peek() {
+    if let Some(Token {
+        kind: TokenKind::Colon,
+        ..
+    }) = tokens.peek()
+    {
         tokens.next();
         match tokens.next() {
-            Some(&Token::Ident(ref name)) => {
+            Some(Token {
+                kind: TokenKind::Ident(ref name),
+                ..
+            }) => {
                 method = Some(Name(name.clone()));
             }
             _ => return Err(()),
@@ -62,30 +87,30 @@ fn parse_funcname(tokens: &mut TokenIter<Token>) -> Result<FuncName> {
 /// exp ::= nil | false | true | Numeral | LiteralString | ‘...’ | functiondef |
 ///         prefixexp | tableconstructor | exp binop exp | unop exp
 fn parse_expr(tokens: &mut TokenIter<Token>) -> Result<Expr> {
-    match tokens.next() {
-        Some(Token::Nil) => Ok(Expr::Nil),
-        Some(Token::True) => Ok(Expr::Bool(true)),
-        Some(Token::False) => Ok(Expr::Bool(false)),
-        Some(Token::String(s)) => Ok(Expr::Str(s.to_string())),
-        Some(Token::Number(n)) => Ok(Expr::Num(*n)),
-        Some(Token::Dots) => Ok(Expr::Dots),
-        Some(Token::Function) => {
+    match tokens.next().map(to_kind) {
+        Some(TokenKind::Nil) => Ok(Expr::Nil),
+        Some(TokenKind::True) => Ok(Expr::Bool(true)),
+        Some(TokenKind::False) => Ok(Expr::Bool(false)),
+        Some(TokenKind::String(s)) => Ok(Expr::Str(s.to_string())),
+        Some(TokenKind::Number(n)) => Ok(Expr::Num(n)),
+        Some(TokenKind::Dots) => Ok(Expr::Dots),
+        Some(TokenKind::Function) => {
             tokens.prev();
             parse_functiondef(tokens).map(Expr::FuncDef)
         }
-        Some(Token::LCurly) => {
+        Some(TokenKind::LCurly) => {
             tokens.prev();
             parse_table_constructor(tokens).map(Expr::Table)
         }
-        tk @ Some(Token::Minus)
-        | tk @ Some(Token::Not)
-        | tk @ Some(Token::Hash)
-        | tk @ Some(Token::BitXor) => {
+        tk @ Some(TokenKind::Minus)
+        | tk @ Some(TokenKind::Not)
+        | tk @ Some(TokenKind::Hash)
+        | tk @ Some(TokenKind::BitXor) => {
             let op = match tk {
-                Some(Token::Minus) => Unop::Minus,
-                Some(Token::Not) => Unop::Not,
-                Some(Token::Hash) => Unop::Len,
-                Some(Token::BitXor) => Unop::BitNot,
+                Some(TokenKind::Minus) => Unop::Minus,
+                Some(TokenKind::Not) => Unop::Not,
+                Some(TokenKind::Hash) => Unop::Len,
+                Some(TokenKind::BitXor) => Unop::BitNot,
                 _ => return Err(()),
             };
 
@@ -102,35 +127,50 @@ fn parse_expr(tokens: &mut TokenIter<Token>) -> Result<Expr> {
             tokens.prev();
             let pre_exp = parse_prefix_exp(tokens).map(|ex| Expr::PrefixExp(Box::new(ex)))?;
 
-            match tokens.peek() {
-                Some(Token::Plus) | Some(Token::Minus) | Some(Token::Mul) | Some(Token::Div)
-                | Some(Token::IntDiv) | Some(Token::Pow) | Some(Token::Mod)
-                | Some(Token::BitAnd) | Some(Token::BitXor) | Some(Token::BitOr)
-                | Some(Token::SHR) | Some(Token::SHL) | Some(Token::Concat) | Some(Token::LT)
-                | Some(Token::LTE) | Some(Token::GT) | Some(Token::GTE) | Some(Token::EQ)
-                | Some(Token::NEQ) | Some(Token::And) | Some(Token::Or) => {
-                    let op = match tokens.next() {
-                        Some(Token::Plus) => BinOp::Plus,
-                        Some(Token::Minus) => BinOp::Minus,
-                        Some(Token::Mul) => BinOp::Mul,
-                        Some(Token::Div) => BinOp::Div,
-                        Some(Token::IntDiv) => BinOp::IntDiv,
-                        Some(Token::Pow) => BinOp::Pow,
-                        Some(Token::Mod) => BinOp::Mod,
-                        Some(Token::BitAnd) => BinOp::BitAnd,
-                        Some(Token::BitXor) => BinOp::BitXor,
-                        Some(Token::BitOr) => BinOp::BitOr,
-                        Some(Token::SHR) => BinOp::BitShr,
-                        Some(Token::SHL) => BinOp::BitShl,
-                        Some(Token::Concat) => BinOp::Concat,
-                        Some(Token::LT) => BinOp::LT,
-                        Some(Token::LTE) => BinOp::LTE,
-                        Some(Token::GT) => BinOp::GT,
-                        Some(Token::GTE) => BinOp::GTE,
-                        Some(Token::EQ) => BinOp::EQ,
-                        Some(Token::NEQ) => BinOp::NEQ,
-                        Some(Token::And) => BinOp::And,
-                        Some(Token::Or) => BinOp::Or,
+            match tokens.peek().map(to_kind) {
+                Some(TokenKind::Plus)
+                | Some(TokenKind::Minus)
+                | Some(TokenKind::Mul)
+                | Some(TokenKind::Div)
+                | Some(TokenKind::IntDiv)
+                | Some(TokenKind::Pow)
+                | Some(TokenKind::Mod)
+                | Some(TokenKind::BitAnd)
+                | Some(TokenKind::BitXor)
+                | Some(TokenKind::BitOr)
+                | Some(TokenKind::SHR)
+                | Some(TokenKind::SHL)
+                | Some(TokenKind::Concat)
+                | Some(TokenKind::LT)
+                | Some(TokenKind::LTE)
+                | Some(TokenKind::GT)
+                | Some(TokenKind::GTE)
+                | Some(TokenKind::EQ)
+                | Some(TokenKind::NEQ)
+                | Some(TokenKind::And)
+                | Some(TokenKind::Or) => {
+                    let op = match tokens.next().map(to_kind) {
+                        Some(TokenKind::Plus) => BinOp::Plus,
+                        Some(TokenKind::Minus) => BinOp::Minus,
+                        Some(TokenKind::Mul) => BinOp::Mul,
+                        Some(TokenKind::Div) => BinOp::Div,
+                        Some(TokenKind::IntDiv) => BinOp::IntDiv,
+                        Some(TokenKind::Pow) => BinOp::Pow,
+                        Some(TokenKind::Mod) => BinOp::Mod,
+                        Some(TokenKind::BitAnd) => BinOp::BitAnd,
+                        Some(TokenKind::BitXor) => BinOp::BitXor,
+                        Some(TokenKind::BitOr) => BinOp::BitOr,
+                        Some(TokenKind::SHR) => BinOp::BitShr,
+                        Some(TokenKind::SHL) => BinOp::BitShl,
+                        Some(TokenKind::Concat) => BinOp::Concat,
+                        Some(TokenKind::LT) => BinOp::LT,
+                        Some(TokenKind::LTE) => BinOp::LTE,
+                        Some(TokenKind::GT) => BinOp::GT,
+                        Some(TokenKind::GTE) => BinOp::GTE,
+                        Some(TokenKind::EQ) => BinOp::EQ,
+                        Some(TokenKind::NEQ) => BinOp::NEQ,
+                        Some(TokenKind::And) => BinOp::And,
+                        Some(TokenKind::Or) => BinOp::Or,
                         _ => return Ok(pre_exp),
                     };
 
@@ -151,10 +191,10 @@ fn parse_expr(tokens: &mut TokenIter<Token>) -> Result<Expr> {
 
 /// field ::= ‘[’ exp ‘]’ ‘=’ exp | Name ‘=’ exp | exp
 fn parse_field(tokens: &mut TokenIter<Token>) -> Result<Field> {
-    match tokens.next() {
+    match tokens.next().map(to_kind) {
         // Name '=' exp
-        Some(Token::Ident(name)) => {
-            tokens.assert_next(&Token::Assign)?;
+        Some(TokenKind::Ident(name)) => {
+            tokens.assert_next(&TokenKind::Assign)?;
 
             let expr = match parse_expr(tokens) {
                 Ok(expr) => expr,
@@ -168,12 +208,12 @@ fn parse_field(tokens: &mut TokenIter<Token>) -> Result<Field> {
             Ok(Field::NameAssign(Name(name.clone()), expr))
         }
         // '[' exp ']' '=' exp
-        Some(Token::LBracket) => {
+        Some(TokenKind::LBracket) => {
             let lexpr = parse_expr(tokens)?;
 
-            tokens.assert_next(&Token::RBracket)?;
+            tokens.assert_next(&TokenKind::RBracket)?;
 
-            tokens.assert_next(&Token::Assign)?;
+            tokens.assert_next(&TokenKind::Assign)?;
 
             let rexpr = parse_expr(tokens)?;
 
@@ -193,15 +233,15 @@ fn parse_field(tokens: &mut TokenIter<Token>) -> Result<Field> {
 
 /// tableconstructor ::= ‘{’ [fieldlist] ‘}’
 fn parse_table_constructor(tokens: &mut TokenIter<Token>) -> Result<TableConstructor> {
-    match tokens.next() {
-        Some(Token::LCurly) => {
-            if let Some(Token::RCurly) = tokens.peek() {
+    match tokens.next().map(to_kind) {
+        Some(TokenKind::LCurly) => {
+            if let Some(TokenKind::RCurly) = tokens.peek().map(to_kind) {
                 tokens.next();
                 return Ok(TableConstructor(vec![]));
             };
             let fieldlist = parse_fieldlist(tokens)?;
-            match tokens.next() {
-                Some(Token::RCurly) => Ok(TableConstructor(fieldlist)),
+            match tokens.next().map(to_kind) {
+                Some(TokenKind::RCurly) => Ok(TableConstructor(fieldlist)),
                 _ => Err(()),
             }
         }
@@ -220,7 +260,7 @@ fn parse_varlist(tokens: &mut TokenIter<Token>) -> Result<Vec<Var>> {
         varlist.push(var);
     }
 
-    while let Some(Token::Comma) = tokens.peek() {
+    while let Some(TokenKind::Comma) = tokens.peek().map(to_kind) {
         tokens.next();
         match parse_var(tokens) {
             Ok(v) => {
@@ -244,7 +284,7 @@ fn parse_exprlist(tokens: &mut TokenIter<Token>) -> Result<Vec<Expr>> {
         exprs.push(expr);
     }
 
-    while let Some(Token::Comma) = tokens.peek() {
+    while let Some(TokenKind::Comma) = tokens.peek().map(to_kind) {
         tokens.next();
         match parse_expr(tokens) {
             Ok(expr) => {
@@ -262,16 +302,16 @@ fn parse_exprlist(tokens: &mut TokenIter<Token>) -> Result<Vec<Expr>> {
 
 /// args ::=  ‘(’ [explist] ‘)’ | tableconstructor | LiteralString
 fn parse_args(tokens: &mut TokenIter<Token>) -> Result<Args> {
-    match tokens.next() {
-        Some(Token::String(s)) => Ok(Args::String(s.to_string())),
-        Some(Token::LParen) => {
-            if let Some(Token::RParen) = tokens.peek() {
+    match tokens.next().map(to_kind) {
+        Some(TokenKind::String(s)) => Ok(Args::String(s.to_string())),
+        Some(TokenKind::LParen) => {
+            if let Some(TokenKind::RParen) = tokens.peek().map(to_kind) {
                 tokens.next();
                 return Ok(Args::ExprList(vec![]));
             }
             parse_exprlist(tokens).map(Args::ExprList)
         }
-        Some(Token::LCurly) => {
+        Some(TokenKind::LCurly) => {
             // parse_table_constructor() expects a first token of LCurly
             tokens.prev();
             parse_table_constructor(tokens).map(Args::TableConstructor)
@@ -290,26 +330,26 @@ fn parse_args(tokens: &mut TokenIter<Token>) -> Result<Args> {
 /// bar[0]
 /// bar.bizz
 fn parse_var(tokens: &mut TokenIter<Token>) -> Result<Var> {
-    match tokens.peek() {
-        Some(Token::Ident(ident)) => {
+    match tokens.peek().map(to_kind) {
+        Some(TokenKind::Ident(ident)) => {
             tokens.next();
-            match tokens.peek() {
-                Some(Token::LBracket) => {
+            match tokens.peek().map(to_kind) {
+                Some(TokenKind::LBracket) => {
                     tokens.next();
 
                     let expr = parse_expr(tokens)?;
 
-                    tokens.assert_next(&Token::RBracket)?;
+                    tokens.assert_next(&TokenKind::RBracket)?;
 
                     Ok(Var::IndexExpr(IndexExpr {
                         expr: Box::new(PrefixExpr::Var(Var::Name(Name(ident.to_string())))),
                         arg: expr,
                     }))
                 }
-                Some(Token::Period) => {
+                Some(TokenKind::Period) => {
                     tokens.next();
 
-                    if let Some(Token::Ident(name)) = tokens.next() {
+                    if let Some(TokenKind::Ident(name)) = tokens.next().map(to_kind) {
                         Ok(Var::PropertyAccess(PropertyAccess {
                             expr: Box::new(PrefixExpr::Var(Var::Name(Name(ident.to_string())))),
                             name: Name(name.to_string()),
@@ -324,23 +364,23 @@ fn parse_var(tokens: &mut TokenIter<Token>) -> Result<Var> {
         Some(_) => {
             let prefixexp = parse_prefix_exp(tokens)?;
 
-            match tokens.peek() {
-                Some(Token::LBracket) => {
+            match tokens.peek().map(to_kind) {
+                Some(TokenKind::LBracket) => {
                     tokens.next();
 
                     let expr = parse_expr(tokens)?;
 
-                    tokens.assert_next(&Token::RBracket)?;
+                    tokens.assert_next(&TokenKind::RBracket)?;
 
                     Ok(Var::IndexExpr(IndexExpr {
                         expr: Box::new(prefixexp),
                         arg: expr,
                     }))
                 }
-                Some(Token::Period) => {
+                Some(TokenKind::Period) => {
                     tokens.next();
 
-                    if let Some(Token::Ident(name)) = tokens.next() {
+                    if let Some(TokenKind::Ident(name)) = tokens.next().map(to_kind) {
                         Ok(Var::PropertyAccess(PropertyAccess {
                             expr: Box::new(prefixexp),
                             name: Name(name.to_string()),
@@ -360,32 +400,32 @@ fn parse_var(tokens: &mut TokenIter<Token>) -> Result<Var> {
 // functioncall ::=  prefixexp args | prefixexp ‘:’ Name args
 // var ::=  Name | prefixexp ‘[’ exp ‘]’ | prefixexp ‘.’ Name
 fn parse_prefix_exp(tokens: &mut TokenIter<Token>) -> Result<PrefixExpr> {
-    match tokens.peek() {
-        Some(Token::LParen) => {
+    match tokens.peek().map(to_kind) {
+        Some(TokenKind::LParen) => {
             tokens.next();
             let expr = parse_expr(tokens).map(PrefixExpr::Expr);
-            tokens.assert_next(&Token::RParen)?;
+            tokens.assert_next(&TokenKind::RParen)?;
             expr
         }
-        Some(Token::Ident(ident)) => {
+        Some(TokenKind::Ident(ident)) => {
             tokens.next();
-            match tokens.peek() {
-                Some(Token::LBracket) => {
+            match tokens.peek().map(to_kind) {
+                Some(TokenKind::LBracket) => {
                     tokens.next();
 
                     let expr = parse_expr(tokens)?;
 
-                    tokens.assert_next(&Token::RBracket)?;
+                    tokens.assert_next(&TokenKind::RBracket)?;
 
                     Ok(PrefixExpr::Var(Var::IndexExpr(IndexExpr {
                         expr: Box::new(PrefixExpr::Var(Var::Name(Name(ident.to_string())))),
                         arg: expr,
                     })))
                 }
-                Some(Token::Period) => {
+                Some(TokenKind::Period) => {
                     tokens.next();
 
-                    if let Some(Token::Ident(name)) = tokens.next() {
+                    if let Some(TokenKind::Ident(name)) = tokens.next().map(to_kind) {
                         Ok(PrefixExpr::Var(Var::PropertyAccess(PropertyAccess {
                             expr: Box::new(PrefixExpr::Var(Var::Name(Name(ident.to_string())))),
                             name: Name(name.to_string()),
@@ -394,7 +434,7 @@ fn parse_prefix_exp(tokens: &mut TokenIter<Token>) -> Result<PrefixExpr> {
                         Err(())
                     }
                 }
-                Some(Token::LParen) => Ok(PrefixExpr::FunctionCall(FunctionCall {
+                Some(TokenKind::LParen) => Ok(PrefixExpr::FunctionCall(FunctionCall {
                     expr: Box::new(PrefixExpr::Var(Var::Name(Name(ident.to_string())))),
                     args: parse_args(tokens)?,
                 })),
@@ -421,32 +461,32 @@ fn parse_prefix_exp(tokens: &mut TokenIter<Token>) -> Result<PrefixExpr> {
 ///         local function Name funcbody |
 ///         local namelist [‘=’ explist]
 fn parse_stat(tokens: &mut TokenIter<Token>) -> Result<Stat> {
-    match tokens.peek() {
-        Some(Token::SemiColon) => {
+    match tokens.peek().map(to_kind) {
+        Some(TokenKind::SemiColon) => {
             tokens.next();
             Ok(Stat::SemiColon)
         }
-        Some(Token::DBColon) => parse_label(tokens).map(Stat::Label),
-        Some(Token::Break) => {
+        Some(TokenKind::DBColon) => parse_label(tokens).map(Stat::Label),
+        Some(TokenKind::Break) => {
             tokens.next();
             Ok(Stat::Break)
         }
-        Some(Token::Goto) => {
+        Some(TokenKind::Goto) => {
             tokens.next();
-            if let Some(Token::Ident(name)) = tokens.next() {
+            if let Some(TokenKind::Ident(name)) = tokens.next().map(to_kind) {
                 Ok(Stat::Goto(Name(name.to_string())))
             } else {
                 Err(())
             }
         }
-        Some(Token::Do) => parse_do_block(tokens).map(Stat::DoBlock),
-        Some(Token::While) => parse_while_block(tokens).map(Stat::WhileBlock),
-        Some(Token::Repeat) => parse_repeat_block(tokens).map(Stat::RepeatBlock),
-        Some(Token::If) => parse_if_block(tokens).map(|f| Stat::IfBlock(Box::new(f))),
-        Some(Token::For) => {
+        Some(TokenKind::Do) => parse_do_block(tokens).map(Stat::DoBlock),
+        Some(TokenKind::While) => parse_while_block(tokens).map(Stat::WhileBlock),
+        Some(TokenKind::Repeat) => parse_repeat_block(tokens).map(Stat::RepeatBlock),
+        Some(TokenKind::If) => parse_if_block(tokens).map(|f| Stat::IfBlock(Box::new(f))),
+        Some(TokenKind::For) => {
             tokens.next();
             tokens.next();
-            if let Some(Token::Assign) = tokens.peek() {
+            if let Some(TokenKind::Assign) = tokens.peek().map(to_kind) {
                 tokens.prev();
                 tokens.prev();
                 parse_for_range(tokens).map(|f| Stat::ForRange(Box::new(f)))
@@ -456,10 +496,10 @@ fn parse_stat(tokens: &mut TokenIter<Token>) -> Result<Stat> {
                 parse_for_in(tokens).map(Stat::ForIn)
             }
         }
-        Some(Token::Function) => parse_function_def(tokens).map(Stat::FunctionDef),
-        Some(Token::Local) => {
+        Some(TokenKind::Function) => parse_function_def(tokens).map(Stat::FunctionDef),
+        Some(TokenKind::Local) => {
             tokens.next();
-            if let Some(Token::Function) = tokens.peek() {
+            if let Some(TokenKind::Function) = tokens.peek().map(to_kind) {
                 tokens.prev();
                 parse_local_function_def(tokens).map(Stat::LocalFunctionDef)
             } else {
@@ -467,9 +507,9 @@ fn parse_stat(tokens: &mut TokenIter<Token>) -> Result<Stat> {
                 parse_local_assignment(tokens).map(Stat::LocalAssignment)
             }
         }
-        Some(Token::Ident(ident)) => {
+        Some(TokenKind::Ident(ident)) => {
             tokens.next();
-            if let Some(Token::LParen) = tokens.peek() {
+            if let Some(TokenKind::LParen) = tokens.peek().map(to_kind) {
                 Ok(Stat::FunctionCall(FunctionCall {
                     expr: Box::new(PrefixExpr::Var(Var::Name(Name(ident.to_string())))),
                     args: parse_args(tokens)?,
@@ -487,7 +527,7 @@ fn parse_stat(tokens: &mut TokenIter<Token>) -> Result<Stat> {
 fn parse_assignment(tokens: &mut TokenIter<Token>) -> Result<Assignment> {
     let varlist = parse_varlist(tokens)?;
 
-    if let Some(Token::Assign) = tokens.peek() {
+    if let Some(TokenKind::Assign) = tokens.peek().map(to_kind) {
         tokens.next();
     } else {
         return Err(());
@@ -500,7 +540,7 @@ fn parse_assignment(tokens: &mut TokenIter<Token>) -> Result<Assignment> {
 
 /// local namelist [‘=’ explist]
 fn parse_local_assignment(tokens: &mut TokenIter<Token>) -> Result<LocalAssignment> {
-    if let Some(Token::Local) = tokens.peek() {
+    if let Some(TokenKind::Local) = tokens.peek().map(to_kind) {
         tokens.next();
     } else {
         return Err(());
@@ -508,7 +548,7 @@ fn parse_local_assignment(tokens: &mut TokenIter<Token>) -> Result<LocalAssignme
 
     let namelist = parse_namelist(tokens)?;
 
-    let exprlist = if let Some(Token::Assign) = tokens.peek() {
+    let exprlist = if let Some(TokenKind::Assign) = tokens.peek().map(to_kind) {
         tokens.next();
         Some(parse_exprlist(tokens)?)
     } else {
@@ -520,19 +560,19 @@ fn parse_local_assignment(tokens: &mut TokenIter<Token>) -> Result<LocalAssignme
 
 /// local function Name funcbody
 fn parse_local_function_def(tokens: &mut TokenIter<Token>) -> Result<LocalFunctionDef> {
-    if let Some(Token::Local) = tokens.peek() {
+    if let Some(TokenKind::Local) = tokens.peek().map(to_kind) {
         tokens.next();
     } else {
         return Err(());
     }
-    if let Some(Token::Function) = tokens.peek() {
+    if let Some(TokenKind::Function) = tokens.peek().map(to_kind) {
         tokens.next();
     } else {
         return Err(());
     }
 
-    let name = match tokens.next() {
-        Some(Token::Ident(name)) => Name(name.to_string()),
+    let name = match tokens.next().map(to_kind) {
+        Some(TokenKind::Ident(name)) => Name(name.to_string()),
         _ => return Err(()),
     };
 
@@ -543,7 +583,7 @@ fn parse_local_function_def(tokens: &mut TokenIter<Token>) -> Result<LocalFuncti
 
 /// function funcname funcbody
 fn parse_function_def(tokens: &mut TokenIter<Token>) -> Result<FunctionDef> {
-    if let Some(Token::Function) = tokens.peek() {
+    if let Some(TokenKind::Function) = tokens.peek().map(to_kind) {
         tokens.next();
     } else {
         return Err(());
@@ -558,7 +598,7 @@ fn parse_function_def(tokens: &mut TokenIter<Token>) -> Result<FunctionDef> {
 
 /// for namelist in explist do block end
 fn parse_for_in(tokens: &mut TokenIter<Token>) -> Result<ForIn> {
-    if let Some(Token::For) = tokens.peek() {
+    if let Some(TokenKind::For) = tokens.peek().map(to_kind) {
         tokens.next();
     } else {
         return Err(());
@@ -566,7 +606,7 @@ fn parse_for_in(tokens: &mut TokenIter<Token>) -> Result<ForIn> {
 
     let namelist = parse_namelist(tokens)?;
 
-    if let Some(Token::In) = tokens.peek() {
+    if let Some(TokenKind::In) = tokens.peek().map(to_kind) {
         tokens.next();
     } else {
         return Err(());
@@ -585,18 +625,18 @@ fn parse_for_in(tokens: &mut TokenIter<Token>) -> Result<ForIn> {
 
 /// for Name ‘=’ exp ‘,’ exp [‘,’ exp] do block end
 fn parse_for_range(tokens: &mut TokenIter<Token>) -> Result<ForRange> {
-    if let Some(Token::For) = tokens.peek() {
+    if let Some(TokenKind::For) = tokens.peek().map(to_kind) {
         tokens.next();
     } else {
         return Err(());
     }
 
-    let name = match tokens.next() {
-        Some(Token::Ident(name)) => Name(name.to_string()),
+    let name = match tokens.next().map(to_kind) {
+        Some(TokenKind::Ident(name)) => Name(name.to_string()),
         _ => return Err(()),
     };
 
-    if let Some(Token::Assign) = tokens.peek() {
+    if let Some(TokenKind::Assign) = tokens.peek().map(to_kind) {
         tokens.next();
     } else {
         return Err(());
@@ -604,7 +644,7 @@ fn parse_for_range(tokens: &mut TokenIter<Token>) -> Result<ForRange> {
 
     let exp_start = parse_expr(tokens)?;
 
-    if let Some(Token::Comma) = tokens.peek() {
+    if let Some(TokenKind::Comma) = tokens.peek().map(to_kind) {
         tokens.next();
     } else {
         return Err(());
@@ -612,7 +652,7 @@ fn parse_for_range(tokens: &mut TokenIter<Token>) -> Result<ForRange> {
 
     let exp_end = parse_expr(tokens)?;
 
-    let exp_step = if let Some(Token::Comma) = tokens.peek() {
+    let exp_step = if let Some(TokenKind::Comma) = tokens.peek().map(to_kind) {
         tokens.next();
         Some(parse_expr(tokens)?)
     } else {
@@ -630,7 +670,7 @@ fn parse_for_range(tokens: &mut TokenIter<Token>) -> Result<ForRange> {
 
 /// elseif exp then block
 fn parse_elseif(tokens: &mut TokenIter<Token>) -> Result<ElseIf> {
-    if let Some(Token::ElseIf) = tokens.peek() {
+    if let Some(TokenKind::ElseIf) = tokens.peek().map(to_kind) {
         tokens.next();
     } else {
         return Err(());
@@ -638,7 +678,7 @@ fn parse_elseif(tokens: &mut TokenIter<Token>) -> Result<ElseIf> {
 
     let expr = parse_expr(tokens)?;
 
-    if let Some(Token::Then) = tokens.peek() {
+    if let Some(TokenKind::Then) = tokens.peek().map(to_kind) {
         tokens.next();
     } else {
         return Err(());
@@ -651,7 +691,7 @@ fn parse_elseif(tokens: &mut TokenIter<Token>) -> Result<ElseIf> {
 
 /// else block
 fn parse_else_block(tokens: &mut TokenIter<Token>) -> Result<Option<Block>> {
-    if let Some(Token::Else) = tokens.peek() {
+    if let Some(TokenKind::Else) = tokens.peek().map(to_kind) {
         tokens.next();
         Ok(Some(parse_block(tokens)?))
     } else {
@@ -661,7 +701,7 @@ fn parse_else_block(tokens: &mut TokenIter<Token>) -> Result<Option<Block>> {
 
 /// if exp then block {elseif exp then block} [else block] end
 fn parse_if_block(tokens: &mut TokenIter<Token>) -> Result<IfBlock> {
-    if let Some(Token::If) = tokens.peek() {
+    if let Some(TokenKind::If) = tokens.peek().map(to_kind) {
         tokens.next();
     } else {
         return Err(());
@@ -669,7 +709,7 @@ fn parse_if_block(tokens: &mut TokenIter<Token>) -> Result<IfBlock> {
 
     let expr = parse_expr(tokens)?;
 
-    if let Some(Token::Then) = tokens.peek() {
+    if let Some(TokenKind::Then) = tokens.peek().map(to_kind) {
         tokens.next();
     } else {
         return Err(());
@@ -695,7 +735,7 @@ fn parse_if_block(tokens: &mut TokenIter<Token>) -> Result<IfBlock> {
 
 /// repeat block until exp
 fn parse_repeat_block(tokens: &mut TokenIter<Token>) -> Result<RepeatBlock> {
-    if let Some(Token::Repeat) = tokens.peek() {
+    if let Some(TokenKind::Repeat) = tokens.peek().map(to_kind) {
         tokens.next();
     } else {
         return Err(());
@@ -703,7 +743,7 @@ fn parse_repeat_block(tokens: &mut TokenIter<Token>) -> Result<RepeatBlock> {
 
     let block = parse_block(tokens)?;
 
-    if let Some(Token::Until) = tokens.peek() {
+    if let Some(TokenKind::Until) = tokens.peek().map(to_kind) {
         tokens.next();
     } else {
         return Err(());
@@ -716,7 +756,7 @@ fn parse_repeat_block(tokens: &mut TokenIter<Token>) -> Result<RepeatBlock> {
 
 /// while exp do block end
 fn parse_while_block(tokens: &mut TokenIter<Token>) -> Result<WhileBlock> {
-    if let Some(Token::While) = tokens.peek() {
+    if let Some(TokenKind::While) = tokens.peek().map(to_kind) {
         tokens.next();
     } else {
         return Err(());
@@ -731,7 +771,7 @@ fn parse_while_block(tokens: &mut TokenIter<Token>) -> Result<WhileBlock> {
 
 /// do block end
 fn parse_do_block(tokens: &mut TokenIter<Token>) -> Result<Block> {
-    if let Some(Token::Do) = tokens.peek() {
+    if let Some(TokenKind::Do) = tokens.peek().map(to_kind) {
         tokens.next();
     } else {
         return Err(());
@@ -739,7 +779,7 @@ fn parse_do_block(tokens: &mut TokenIter<Token>) -> Result<Block> {
 
     let blk = parse_block(tokens)?;
 
-    if let Some(Token::End) = tokens.next() {
+    if let Some(TokenKind::End) = tokens.next().map(to_kind) {
         Ok(blk)
     } else {
         Err(())
@@ -758,8 +798,8 @@ fn parse_block(tokens: &mut TokenIter<Token>) -> Result<Block> {
 
 /// retstat ::= return [explist] [‘;’]
 fn parse_retstat(tokens: &mut TokenIter<Token>) -> Result<Option<Vec<Expr>>> {
-    match tokens.peek() {
-        Some(Token::Return) => {
+    match tokens.peek().map(to_kind) {
+        Some(TokenKind::Return) => {
             tokens.next();
         }
         _ => return Ok(None),
@@ -767,7 +807,7 @@ fn parse_retstat(tokens: &mut TokenIter<Token>) -> Result<Option<Vec<Expr>>> {
 
     let exprlist = parse_exprlist(tokens)?;
 
-    if let Some(Token::SemiColon) = tokens.peek() {
+    if let Some(TokenKind::SemiColon) = tokens.peek().map(to_kind) {
         tokens.next();
     }
     Ok(Some(exprlist))
@@ -775,9 +815,9 @@ fn parse_retstat(tokens: &mut TokenIter<Token>) -> Result<Option<Vec<Expr>>> {
 
 /// funcbody ::= ‘(’ [parlist] ‘)’ block end
 fn parse_funcbody(tokens: &mut TokenIter<Token>) -> Result<FuncBody> {
-    tokens.assert_next(&Token::LParen)?;
+    tokens.assert_next(&TokenKind::LParen)?;
     let params = parse_parlist(tokens)?;
-    tokens.assert_next(&Token::RParen)?;
+    tokens.assert_next(&TokenKind::RParen)?;
 
     Ok(FuncBody {
         params,
@@ -789,7 +829,7 @@ fn parse_funcbody(tokens: &mut TokenIter<Token>) -> Result<FuncBody> {
 /// stat ::= function funcname funcbody
 /// stat ::= local function Name funcbody
 fn parse_functiondef(tokens: &mut TokenIter<Token>) -> Result<FunctionDef> {
-    if let Some(Token::Function) = tokens.next() {
+    if let Some(TokenKind::Function) = tokens.next().map(to_kind) {
         let name = parse_funcname(tokens)?;
         let body = parse_funcbody(tokens)?;
 
@@ -801,20 +841,20 @@ fn parse_functiondef(tokens: &mut TokenIter<Token>) -> Result<FunctionDef> {
 
 /// namelist ::= Name {‘,’ Name}
 fn parse_namelist(tokens: &mut TokenIter<Token>) -> Result<Vec<Name>> {
-    let first_name = match tokens.next().ok_or_else(|| ())? {
-        Token::Ident(name) => name,
+    let first_name = match tokens.next().map(to_kind).ok_or_else(|| ())? {
+        TokenKind::Ident(name) => name,
         _ => return Err(()),
     };
 
     let mut names = vec![Name(first_name.clone())];
 
-    while tokens.peek() == Some(&&Token::Comma) {
+    while tokens.peek().map(to_kind) == Some(TokenKind::Comma) {
         tokens.next();
-        match tokens.next() {
-            Some(Token::Ident(name)) => {
+        match tokens.next().map(to_kind) {
+            Some(TokenKind::Ident(name)) => {
                 names.push(Name(name.clone()));
             }
-            Some(Token::Dots) => {
+            Some(TokenKind::Dots) => {
                 // put back Dots and the previous Comma tokens
                 tokens.prev();
                 tokens.prev();
@@ -829,9 +869,9 @@ fn parse_namelist(tokens: &mut TokenIter<Token>) -> Result<Vec<Name>> {
 
 /// parlist ::= namelist [‘,’ ‘...’] | ‘...’
 fn parse_parlist(tokens: &mut TokenIter<Token>) -> Result<Params> {
-    match tokens.peek() {
+    match tokens.peek().map(to_kind) {
         // | '...'
-        Some(Token::Dots) => {
+        Some(TokenKind::Dots) => {
             tokens.next();
             Ok(Params {
                 names: vec![],
@@ -839,15 +879,15 @@ fn parse_parlist(tokens: &mut TokenIter<Token>) -> Result<Params> {
             })
         }
         // namelist
-        Some(Token::Ident(_)) => {
+        Some(TokenKind::Ident(_)) => {
             let names = parse_namelist(tokens).unwrap_or_default();
 
             // [',' '...']
-            let variadic = match tokens.peek() {
-                Some(Token::Comma) => {
+            let variadic = match tokens.peek().map(to_kind) {
+                Some(TokenKind::Comma) => {
                     tokens.next();
-                    match tokens.next() {
-                        Some(Token::Dots) => true,
+                    match tokens.next().map(to_kind) {
+                        Some(TokenKind::Dots) => true,
                         _ => false,
                     }
                 }
@@ -871,8 +911,8 @@ fn parse_fieldlist(tokens: &mut TokenIter<Token>) -> Result<Vec<Field>> {
     while let Ok(f) = parse_field(tokens) {
         fields.push(f);
 
-        match tokens.peek() {
-            Some(Token::Comma) | Some(Token::SemiColon) => {
+        match tokens.peek().map(to_kind) {
+            Some(TokenKind::Comma) | Some(TokenKind::SemiColon) => {
                 tokens.next();
                 continue;
             }
@@ -1102,7 +1142,7 @@ mod test_parse {
             Ok(vec![Expr::Nil, Expr::Bool(false)])
         );
 
-        assert_eq!(tokens.next(), Some(&Token::Comma));
+        assert_eq!(tokens.next().map(to_kind), Some(TokenKind::Comma));
     }
 
     #[test]

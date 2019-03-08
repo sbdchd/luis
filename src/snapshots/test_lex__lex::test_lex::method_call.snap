@@ -1,0 +1,72 @@
+---
+created: "2019-03-08T07:54:54.234048Z"
+creator: insta@0.7.1
+source: src/lex.rs
+expression: actual
+---
+[
+    Token {
+        kind: Ident(
+            "io"
+        ),
+        span: Span {
+            start: 0,
+            end: 2
+        }
+    },
+    Token {
+        kind: Period,
+        span: Span {
+            start: 2,
+            end: 3
+        }
+    },
+    Token {
+        kind: Ident(
+            "write"
+        ),
+        span: Span {
+            start: 3,
+            end: 8
+        }
+    },
+    Token {
+        kind: LParen,
+        span: Span {
+            start: 8,
+            end: 9
+        }
+    },
+    Token {
+        kind: String(
+            "foo"
+        ),
+        span: Span {
+            start: 9,
+            end: 14
+        }
+    },
+    Token {
+        kind: Comma,
+        span: Span {
+            start: 14,
+            end: 15
+        }
+    },
+    Token {
+        kind: String(
+            "\\n"
+        ),
+        span: Span {
+            start: 16,
+            end: 20
+        }
+    },
+    Token {
+        kind: RParen,
+        span: Span {
+            start: 20,
+            end: 21
+        }
+    }
+]

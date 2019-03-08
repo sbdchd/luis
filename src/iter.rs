@@ -1,3 +1,4 @@
+use crate::lex::{Token, TokenKind};
 use std::cmp::max;
 
 pub trait PeekableIterator: Iterator {
@@ -6,10 +7,6 @@ pub trait PeekableIterator: Iterator {
 
 pub trait ForwardBackwardIterator: Iterator {
     fn prev(&mut self) -> Option<Self::Item>;
-}
-
-pub trait AssertNextIterator: Iterator {
-    fn assert_next(&mut self, item: Self::Item) -> Result<(), ()>;
 }
 
 #[derive(Debug)]
@@ -83,14 +80,11 @@ where
     }
 }
 
-impl<'a, Item> AssertNextIterator for TokenIter<'a, Item>
-where
-    Item: PartialEq,
-{
-    fn assert_next(&mut self, item: &Item) -> Result<(), ()> {
+impl<'a> TokenIter<'a, Token> {
+    pub fn assert_next(&mut self, knd: &TokenKind) -> Result<(), ()> {
         match self.next() {
-            Some(act) => {
-                if act == item {
+            Some(Token { kind, .. }) => {
+                if kind == knd {
                     Ok(())
                 } else {
                     Err(())

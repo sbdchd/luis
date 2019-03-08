@@ -1,0 +1,113 @@
+---
+created: "2019-03-08T07:49:48.265995Z"
+creator: insta@0.7.1
+source: src/lex.rs
+expression: actual
+---
+[
+    Token {
+        kind: Ident(
+            "foo"
+        ),
+        span: Span {
+            start: 0,
+            end: 3
+        }
+    },
+    Token {
+        kind: NEQ,
+        span: Span {
+            start: 4,
+            end: 6
+        }
+    },
+    Token {
+        kind: Ident(
+            "bar"
+        ),
+        span: Span {
+            start: 7,
+            end: 10
+        }
+    },
+    Token {
+        kind: EQ,
+        span: Span {
+            start: 11,
+            end: 13
+        }
+    },
+    Token {
+        kind: Ident(
+            "bizz"
+        ),
+        span: Span {
+            start: 14,
+            end: 18
+        }
+    },
+    Token {
+        kind: GTE,
+        span: Span {
+            start: 19,
+            end: 21
+        }
+    },
+    Token {
+        kind: Number(
+            4.0
+        ),
+        span: Span {
+            start: 22,
+            end: 23
+        }
+    },
+    Token {
+        kind: GT,
+        span: Span {
+            start: 24,
+            end: 25
+        }
+    },
+    Token {
+        kind: Number(
+            3.0
+        ),
+        span: Span {
+            start: 26,
+            end: 27
+        }
+    },
+    Token {
+        kind: LT,
+        span: Span {
+            start: 28,
+            end: 29
+        }
+    },
+    Token {
+        kind: Number(
+            10.0
+        ),
+        span: Span {
+            start: 30,
+            end: 32
+        }
+    },
+    Token {
+        kind: LTE,
+        span: Span {
+            start: 33,
+            end: 35
+        }
+    },
+    Token {
+        kind: Number(
+            2.0
+        ),
+        span: Span {
+            start: 36,
+            end: 37
+        }
+    }
+]

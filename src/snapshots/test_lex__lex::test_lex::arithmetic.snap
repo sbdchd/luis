@@ -1,0 +1,351 @@
+---
+created: "2019-03-08T07:47:25.213736Z"
+creator: insta@0.7.1
+source: src/lex.rs
+expression: actual
+---
+[
+    Token {
+        kind: NewLine,
+        span: Span {
+            start: 0,
+            end: 1
+        }
+    },
+    Token {
+        kind: Ident(
+            "x"
+        ),
+        span: Span {
+            start: 13,
+            end: 14
+        }
+    },
+    Token {
+        kind: Assign,
+        span: Span {
+            start: 15,
+            end: 16
+        }
+    },
+    Token {
+        kind: Number(
+            2.0
+        ),
+        span: Span {
+            start: 17,
+            end: 18
+        }
+    },
+    Token {
+        kind: Plus,
+        span: Span {
+            start: 19,
+            end: 20
+        }
+    },
+    Token {
+        kind: Number(
+            3.0
+        ),
+        span: Span {
+            start: 21,
+            end: 22
+        }
+    },
+    Token {
+        kind: NewLine,
+        span: Span {
+            start: 22,
+            end: 23
+        }
+    },
+    Token {
+        kind: Ident(
+            "x"
+        ),
+        span: Span {
+            start: 35,
+            end: 36
+        }
+    },
+    Token {
+        kind: Assign,
+        span: Span {
+            start: 37,
+            end: 38
+        }
+    },
+    Token {
+        kind: Number(
+            2.0
+        ),
+        span: Span {
+            start: 39,
+            end: 40
+        }
+    },
+    Token {
+        kind: Minus,
+        span: Span {
+            start: 41,
+            end: 42
+        }
+    },
+    Token {
+        kind: Number(
+            3.0
+        ),
+        span: Span {
+            start: 43,
+            end: 44
+        }
+    },
+    Token {
+        kind: NewLine,
+        span: Span {
+            start: 44,
+            end: 45
+        }
+    },
+    Token {
+        kind: Ident(
+            "x"
+        ),
+        span: Span {
+            start: 57,
+            end: 58
+        }
+    },
+    Token {
+        kind: Assign,
+        span: Span {
+            start: 59,
+            end: 60
+        }
+    },
+    Token {
+        kind: Number(
+            2.0
+        ),
+        span: Span {
+            start: 61,
+            end: 62
+        }
+    },
+    Token {
+        kind: Mul,
+        span: Span {
+            start: 63,
+            end: 64
+        }
+    },
+    Token {
+        kind: Number(
+            3.0
+        ),
+        span: Span {
+            start: 65,
+            end: 66
+        }
+    },
+    Token {
+        kind: NewLine,
+        span: Span {
+            start: 66,
+            end: 67
+        }
+    },
+    Token {
+        kind: Ident(
+            "x"
+        ),
+        span: Span {
+            start: 79,
+            end: 80
+        }
+    },
+    Token {
+        kind: Assign,
+        span: Span {
+            start: 81,
+            end: 82
+        }
+    },
+    Token {
+        kind: Number(
+            2.0
+        ),
+        span: Span {
+            start: 83,
+            end: 84
+        }
+    },
+    Token {
+        kind: Div,
+        span: Span {
+            start: 85,
+            end: 86
+        }
+    },
+    Token {
+        kind: Number(
+            3.0
+        ),
+        span: Span {
+            start: 87,
+            end: 88
+        }
+    },
+    Token {
+        kind: NewLine,
+        span: Span {
+            start: 88,
+            end: 89
+        }
+    },
+    Token {
+        kind: Ident(
+            "x"
+        ),
+        span: Span {
+            start: 101,
+            end: 102
+        }
+    },
+    Token {
+        kind: Assign,
+        span: Span {
+            start: 103,
+            end: 104
+        }
+    },
+    Token {
+        kind: Number(
+            2.0
+        ),
+        span: Span {
+            start: 105,
+            end: 106
+        }
+    },
+    Token {
+        kind: Mod,
+        span: Span {
+            start: 107,
+            end: 108
+        }
+    },
+    Token {
+        kind: Number(
+            3.0
+        ),
+        span: Span {
+            start: 109,
+            end: 110
+        }
+    },
+    Token {
+        kind: NewLine,
+        span: Span {
+            start: 110,
+            end: 111
+        }
+    },
+    Token {
+        kind: Ident(
+            "x"
+        ),
+        span: Span {
+            start: 123,
+            end: 124
+        }
+    },
+    Token {
+        kind: Assign,
+        span: Span {
+            start: 125,
+            end: 126
+        }
+    },
+    Token {
+        kind: Number(
+            2.0
+        ),
+        span: Span {
+            start: 127,
+            end: 128
+        }
+    },
+    Token {
+        kind: Pow,
+        span: Span {
+            start: 129,
+            end: 130
+        }
+    },
+    Token {
+        kind: Number(
+            3.0
+        ),
+        span: Span {
+            start: 131,
+            end: 132
+        }
+    },
+    Token {
+        kind: NewLine,
+        span: Span {
+            start: 132,
+            end: 133
+        }
+    },
+    Token {
+        kind: Ident(
+            "x"
+        ),
+        span: Span {
+            start: 145,
+            end: 146
+        }
+    },
+    Token {
+        kind: Assign,
+        span: Span {
+            start: 147,
+            end: 148
+        }
+    },
+    Token {
+        kind: Number(
+            2.0
+        ),
+        span: Span {
+            start: 149,
+            end: 150
+        }
+    },
+    Token {
+        kind: IntDiv,
+        span: Span {
+            start: 151,
+            end: 153
+        }
+    },
+    Token {
+        kind: Number(
+            3.0
+        ),
+        span: Span {
+            start: 154,
+            end: 155
+        }
+    },
+    Token {
+        kind: NewLine,
+        span: Span {
+            start: 155,
+            end: 156
+        }
+    }
+]

@@ -1,0 +1,141 @@
+---
+created: "2019-03-08T07:47:25.217889Z"
+creator: insta@0.7.1
+source: src/lex.rs
+expression: actual
+---
+[
+    Token {
+        kind: For,
+        span: Span {
+            start: 0,
+            end: 3
+        }
+    },
+    Token {
+        kind: Ident(
+            "k"
+        ),
+        span: Span {
+            start: 4,
+            end: 5
+        }
+    },
+    Token {
+        kind: Comma,
+        span: Span {
+            start: 5,
+            end: 6
+        }
+    },
+    Token {
+        kind: Ident(
+            "v"
+        ),
+        span: Span {
+            start: 6,
+            end: 7
+        }
+    },
+    Token {
+        kind: In,
+        span: Span {
+            start: 8,
+            end: 10
+        }
+    },
+    Token {
+        kind: Ident(
+            "pairs"
+        ),
+        span: Span {
+            start: 11,
+            end: 16
+        }
+    },
+    Token {
+        kind: LParen,
+        span: Span {
+            start: 16,
+            end: 17
+        }
+    },
+    Token {
+        kind: Ident(
+            "t"
+        ),
+        span: Span {
+            start: 17,
+            end: 18
+        }
+    },
+    Token {
+        kind: RParen,
+        span: Span {
+            start: 18,
+            end: 19
+        }
+    },
+    Token {
+        kind: Do,
+        span: Span {
+            start: 20,
+            end: 22
+        }
+    },
+    Token {
+        kind: Ident(
+            "print"
+        ),
+        span: Span {
+            start: 23,
+            end: 28
+        }
+    },
+    Token {
+        kind: LParen,
+        span: Span {
+            start: 28,
+            end: 29
+        }
+    },
+    Token {
+        kind: Ident(
+            "k"
+        ),
+        span: Span {
+            start: 29,
+            end: 30
+        }
+    },
+    Token {
+        kind: Comma,
+        span: Span {
+            start: 30,
+            end: 31
+        }
+    },
+    Token {
+        kind: Ident(
+            "v"
+        ),
+        span: Span {
+            start: 32,
+            end: 33
+        }
+    },
+    Token {
+        kind: RParen,
+        span: Span {
+            start: 33,
+            end: 34
+        }
+    },
+    Token {
+        kind: End,
+        span: Span {
+            start: 35,
+            end: 38
+        }
+    }
+]

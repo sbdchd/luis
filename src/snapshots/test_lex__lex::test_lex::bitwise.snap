@@ -1,0 +1,238 @@
+---
+created: "2019-03-08T07:47:25.215606Z"
+creator: insta@0.7.1
+source: src/lex.rs
+expression: actual
+---
+[
+    Token {
+        kind: Ident(
+            "x"
+        ),
+        span: Span {
+            start: 0,
+            end: 1
+        }
+    },
+    Token {
+        kind: Assign,
+        span: Span {
+            start: 2,
+            end: 3
+        }
+    },
+    Token {
+        kind: LParen,
+        span: Span {
+            start: 4,
+            end: 5
+        }
+    },
+    Token {
+        kind: Number(
+            2.0
+        ),
+        span: Span {
+            start: 5,
+            end: 6
+        }
+    },
+    Token {
+        kind: BitAnd,
+        span: Span {
+            start: 7,
+            end: 8
+        }
+    },
+    Token {
+        kind: Number(
+            3.0
+        ),
+        span: Span {
+            start: 9,
+            end: 10
+        }
+    },
+    Token {
+        kind: RParen,
+        span: Span {
+            start: 10,
+            end: 11
+        }
+    },
+    Token {
+        kind: BitOr,
+        span: Span {
+            start: 12,
+            end: 13
+        }
+    },
+    Token {
+        kind: LParen,
+        span: Span {
+            start: 14,
+            end: 15
+        }
+    },
+    Token {
+        kind: BitXor,
+        span: Span {
+            start: 15,
+            end: 16
+        }
+    },
+    Token {
+        kind: Number(
+            3.0
+        ),
+        span: Span {
+            start: 16,
+            end: 17
+        }
+    },
+    Token {
+        kind: RParen,
+        span: Span {
+            start: 17,
+            end: 18
+        }
+    },
+    Token {
+        kind: BitOr,
+        span: Span {
+            start: 19,
+            end: 20
+        }
+    },
+    Token {
+        kind: LParen,
+        span: Span {
+            start: 21,
+            end: 22
+        }
+    },
+    Token {
+        kind: Number(
+            5.0
+        ),
+        span: Span {
+            start: 22,
+            end: 23
+        }
+    },
+    Token {
+        kind: SHR,
+        span: Span {
+            start: 24,
+            end: 26
+        }
+    },
+    Token {
+        kind: Number(
+            2.0
+        ),
+        span: Span {
+            start: 27,
+            end: 28
+        }
+    },
+    Token {
+        kind: RParen,
+        span: Span {
+            start: 28,
+            end: 29
+        }
+    },
+    Token {
+        kind: BitOr,
+        span: Span {
+            start: 30,
+            end: 31
+        }
+    },
+    Token {
+        kind: LParen,
+        span: Span {
+            start: 32,
+            end: 33
+        }
+    },
+    Token {
+        kind: Number(
+            5.0
+        ),
+        span: Span {
+            start: 33,
+            end: 34
+        }
+    },
+    Token {
+        kind: SHL,
+        span: Span {
+            start: 35,
+            end: 37
+        }
+    },
+    Token {
+        kind: Number(
+            2.0
+        ),
+        span: Span {
+            start: 38,
+            end: 39
+        }
+    },
+    Token {
+        kind: RParen,
+        span: Span {
+            start: 39,
+            end: 40
+        }
+    },
+    Token {
+        kind: BitOr,
+        span: Span {
+            start: 41,
+            end: 42
+        }
+    },
+    Token {
+        kind: LParen,
+        span: Span {
+            start: 43,
+            end: 44
+        }
+    },
+    Token {
+        kind: Number(
+            4.0
+        ),
+        span: Span {
+            start: 44,
+            end: 45
+        }
+    },
+    Token {
+        kind: BitXor,
+        span: Span {
+            start: 46,
+            end: 47
+        }
+    },
+    Token {
+        kind: Number(
+            4.0
+        ),
+        span: Span {
+            start: 48,
+            end: 49
+        }
+    },
+    Token {
+        kind: RParen,
+        span: Span {
+            start: 49,
+            end: 50
+        }
+    }
+]
