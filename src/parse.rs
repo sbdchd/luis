@@ -36,7 +36,6 @@ fn parse_label(tokens: &mut TokenIter<Token>) -> Result<Name> {
 
         Ok(Name(ident.to_string()))
     } else {
-        tokens.prev();
         Err(())
     }
 }
@@ -199,8 +198,6 @@ fn parse_field(tokens: &mut TokenIter<Token>) -> Result<Field> {
             let expr = match parse_expr(tokens) {
                 Ok(expr) => expr,
                 Err(_) => {
-                    tokens.prev();
-                    // error parsing expr
                     return Err(());
                 }
             };
@@ -222,11 +219,7 @@ fn parse_field(tokens: &mut TokenIter<Token>) -> Result<Field> {
         // exp
         _ => match parse_expr(tokens) {
             Ok(e) => Ok(Field::PosAssign(e)),
-            _ => {
-                tokens.prev();
-                // no expression to parse
-                Err(())
-            }
+            _ => Err(()),
         },
     }
 }
@@ -245,10 +238,7 @@ fn parse_table_constructor(tokens: &mut TokenIter<Token>) -> Result<TableConstru
                 _ => Err(()),
             }
         }
-        _ => {
-            tokens.prev();
-            Err(())
-        }
+        _ => Err(()),
     }
 }
 
@@ -316,11 +306,7 @@ fn parse_args(tokens: &mut TokenIter<Token>) -> Result<Args> {
             tokens.prev();
             parse_table_constructor(tokens).map(Args::TableConstructor)
         }
-        None => Err(()),
-        Some(_) => {
-            tokens.prev();
-            Err(())
-        }
+        _ => Err(()),
     }
 }
 
@@ -925,6 +911,7 @@ fn parse_fieldlist(tokens: &mut TokenIter<Token>) -> Result<Vec<Field>> {
 #[cfg(test)]
 mod test_parse {
     use super::*;
+    use pretty_assertions::assert_eq;
 
     #[test]
     fn test_parse_expr() {
