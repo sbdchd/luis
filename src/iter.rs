@@ -93,4 +93,11 @@ impl<'a> TokenIter<'a, Token> {
             None => Err(()),
         }
     }
+    pub fn cur(&mut self) -> Option<&'a Token> {
+        let index = match self.index {
+            None => return None,
+            Some(i) => i,
+        };
+        self.vector.get(index)
+    }
 }

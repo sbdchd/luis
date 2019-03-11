@@ -83,10 +83,8 @@ fn parse_funcname(tokens: &mut TokenIter<Token>) -> Result<FuncName> {
     Ok(FuncName { path, method })
 }
 
-/// exp ::= nil | false | true | Numeral | LiteralString | ‘...’ | functiondef |
-///         prefixexp | tableconstructor | exp binop exp | unop exp
-fn parse_expr(tokens: &mut TokenIter<Token>) -> Result<Expr> {
-    match tokens.next().map(to_kind) {
+fn parse_simple_exp(tokens: &mut TokenIter<Token>) -> Result<Expr> {
+    match tokens.cur().map(to_kind) {
         Some(TokenKind::Nil) => Ok(Expr::Nil),
         Some(TokenKind::True) => Ok(Expr::Bool(true)),
         Some(TokenKind::False) => Ok(Expr::Bool(false)),
@@ -101,6 +99,34 @@ fn parse_expr(tokens: &mut TokenIter<Token>) -> Result<Expr> {
             tokens.prev();
             parse_table_constructor(tokens).map(Expr::Table)
         }
+        _ => Err(()),
+    }
+}
+
+fn bin_priority(op: &Option<TokenKind>) -> i32 {
+    match op {
+        Some(TokenKind::Pow) => 12,
+        Some(TokenKind::Mul)
+        | Some(TokenKind::Div)
+        | Some(TokenKind::IntDiv)
+        | Some(TokenKind::Mod) => 10,
+        Some(TokenKind::Plus) | Some(TokenKind::Minus) => 9,
+        Some(TokenKind::Concat) => 8,
+        Some(TokenKind::SHL) | Some(TokenKind::SHR) => 7,
+        Some(TokenKind::BitAnd) => 6,
+        Some(TokenKind::BitXor) => 5,
+        Some(TokenKind::BitOr) => 4,
+        Some(TokenKind::LT) | Some(TokenKind::GT) | Some(TokenKind::LTE) | Some(TokenKind::GTE)
+        | Some(TokenKind::EQ) | Some(TokenKind::NEQ) => 3,
+        Some(TokenKind::Or) | Some(TokenKind::And) => 1,
+        _ => 0,
+    }
+}
+
+const UNARY_PRIORITY: i32 = 12;
+
+fn parse_unexp(tokens: &mut TokenIter<Token>) -> Result<Expr> {
+    match tokens.next().map(to_kind) {
         tk @ Some(TokenKind::Minus)
         | tk @ Some(TokenKind::Not)
         | tk @ Some(TokenKind::Hash)
@@ -113,79 +139,104 @@ fn parse_expr(tokens: &mut TokenIter<Token>) -> Result<Expr> {
                 _ => return Err(()),
             };
 
+            let exp = parse_sub_expr(tokens, UNARY_PRIORITY)?;
             Ok(Expr::UnExp(UnExp {
                 op,
-                exp: Box::new(parse_expr(tokens)?),
+                exp: Box::new(exp),
             }))
         }
-        None => {
-            tokens.prev();
-            Err(())
-        }
-        _ => {
-            tokens.prev();
-            let pre_exp = parse_prefix_exp(tokens).map(|ex| Expr::PrefixExp(Box::new(ex)))?;
-
-            match tokens.peek().map(to_kind) {
-                Some(TokenKind::Plus)
-                | Some(TokenKind::Minus)
-                | Some(TokenKind::Mul)
-                | Some(TokenKind::Div)
-                | Some(TokenKind::IntDiv)
-                | Some(TokenKind::Pow)
-                | Some(TokenKind::Mod)
-                | Some(TokenKind::BitAnd)
-                | Some(TokenKind::BitXor)
-                | Some(TokenKind::BitOr)
-                | Some(TokenKind::SHR)
-                | Some(TokenKind::SHL)
-                | Some(TokenKind::Concat)
-                | Some(TokenKind::LT)
-                | Some(TokenKind::LTE)
-                | Some(TokenKind::GT)
-                | Some(TokenKind::GTE)
-                | Some(TokenKind::EQ)
-                | Some(TokenKind::NEQ)
-                | Some(TokenKind::And)
-                | Some(TokenKind::Or) => {
-                    let op = match tokens.next().map(to_kind) {
-                        Some(TokenKind::Plus) => BinOp::Plus,
-                        Some(TokenKind::Minus) => BinOp::Minus,
-                        Some(TokenKind::Mul) => BinOp::Mul,
-                        Some(TokenKind::Div) => BinOp::Div,
-                        Some(TokenKind::IntDiv) => BinOp::IntDiv,
-                        Some(TokenKind::Pow) => BinOp::Pow,
-                        Some(TokenKind::Mod) => BinOp::Mod,
-                        Some(TokenKind::BitAnd) => BinOp::BitAnd,
-                        Some(TokenKind::BitXor) => BinOp::BitXor,
-                        Some(TokenKind::BitOr) => BinOp::BitOr,
-                        Some(TokenKind::SHR) => BinOp::BitShr,
-                        Some(TokenKind::SHL) => BinOp::BitShl,
-                        Some(TokenKind::Concat) => BinOp::Concat,
-                        Some(TokenKind::LT) => BinOp::LT,
-                        Some(TokenKind::LTE) => BinOp::LTE,
-                        Some(TokenKind::GT) => BinOp::GT,
-                        Some(TokenKind::GTE) => BinOp::GTE,
-                        Some(TokenKind::EQ) => BinOp::EQ,
-                        Some(TokenKind::NEQ) => BinOp::NEQ,
-                        Some(TokenKind::And) => BinOp::And,
-                        Some(TokenKind::Or) => BinOp::Or,
-                        _ => return Ok(pre_exp),
-                    };
-
-                    let rhs = parse_prefix_exp(tokens)
-                        .map(|ex| Box::new(Expr::PrefixExp(Box::new(ex))))?;
-
-                    Ok(Expr::BinExp(BinExp {
-                        op,
-                        lhs: Box::new(pre_exp),
-                        rhs,
-                    }))
-                }
-                _ => Ok(pre_exp),
-            }
-        }
+        _ => Err(()),
     }
+}
+
+/// exp ::= nil | false | true | Numeral | LiteralString | ‘...’ | functiondef |
+///         prefixexp | tableconstructor | exp binop exp | unop exp
+fn parse_expr(tokens: &mut TokenIter<Token>) -> Result<Expr> {
+    parse_sub_expr(tokens, 0)
+}
+
+fn is_bin_op(token: &Option<TokenKind>) -> bool {
+    match token {
+        Some(TokenKind::Plus)
+        | Some(TokenKind::Minus)
+        | Some(TokenKind::Mul)
+        | Some(TokenKind::Div)
+        | Some(TokenKind::IntDiv)
+        | Some(TokenKind::Pow)
+        | Some(TokenKind::Mod)
+        | Some(TokenKind::BitAnd)
+        | Some(TokenKind::BitXor)
+        | Some(TokenKind::BitOr)
+        | Some(TokenKind::SHR)
+        | Some(TokenKind::SHL)
+        | Some(TokenKind::Concat)
+        | Some(TokenKind::LT)
+        | Some(TokenKind::LTE)
+        | Some(TokenKind::GT)
+        | Some(TokenKind::GTE)
+        | Some(TokenKind::EQ)
+        | Some(TokenKind::NEQ)
+        | Some(TokenKind::And)
+        | Some(TokenKind::Or) => true,
+        _ => false,
+    }
+}
+
+// subexpr ::= (simpleexp | unop subexpr ) { binop subexpr }
+// see: https://github.com/lua/lua/blob/2c32bff60987d38a60a58d4f0123f3783da60a63/lparser.c#L1120-L1156
+fn parse_sub_expr(tokens: &mut TokenIter<Token>, min_priority: i32) -> Result<Expr> {
+    let mut expression = parse_unexp(tokens)
+        .or_else(|_| parse_simple_exp(tokens))
+        .or_else(|_| {
+            tokens.prev();
+            parse_prefix_exp(tokens).map(|x| Expr::PrefixExp(Box::new(x)))
+        })?;
+
+    while is_bin_op(&tokens.peek().map(to_kind))
+        && bin_priority(&tokens.peek().map(to_kind)) > min_priority
+    {
+        tokens.next();
+
+        let op = match tokens.cur().map(to_kind) {
+            Some(TokenKind::Plus) => BinOp::Plus,
+            Some(TokenKind::Minus) => BinOp::Minus,
+            Some(TokenKind::Mul) => BinOp::Mul,
+            Some(TokenKind::Div) => BinOp::Div,
+            Some(TokenKind::IntDiv) => BinOp::IntDiv,
+            Some(TokenKind::Pow) => BinOp::Pow,
+            Some(TokenKind::Mod) => BinOp::Mod,
+            Some(TokenKind::BitAnd) => BinOp::BitAnd,
+            Some(TokenKind::BitXor) => BinOp::BitXor,
+            Some(TokenKind::BitOr) => BinOp::BitOr,
+            Some(TokenKind::SHR) => BinOp::BitShr,
+            Some(TokenKind::SHL) => BinOp::BitShl,
+            Some(TokenKind::Concat) => BinOp::Concat,
+            Some(TokenKind::LT) => BinOp::LT,
+            Some(TokenKind::LTE) => BinOp::LTE,
+            Some(TokenKind::GT) => BinOp::GT,
+            Some(TokenKind::GTE) => BinOp::GTE,
+            Some(TokenKind::EQ) => BinOp::EQ,
+            Some(TokenKind::NEQ) => BinOp::NEQ,
+            Some(TokenKind::And) => BinOp::And,
+            Some(TokenKind::Or) => BinOp::Or,
+            _ => break,
+        };
+
+        let prority = bin_priority(&tokens.peek().map(to_kind));
+
+        let rhs = match parse_sub_expr(tokens, prority) {
+            Err(_) => break,
+            Ok(rhs) => rhs,
+        };
+
+        expression = Expr::BinExp(BinExp {
+            op,
+            lhs: Box::new(expression),
+            rhs: Box::new(rhs),
+        })
+    }
+
+    Ok(expression)
 }
 
 /// field ::= ‘[’ exp ‘]’ ‘=’ exp | Name ‘=’ exp | exp
@@ -1008,6 +1059,44 @@ mod test_parse {
     }
 
     #[test]
+    fn test_multi_part_binexpr() {
+        let tokens: Vec<_> = Lexer::new("4 + 3 - 2").collect();
+        let mut tokens = TokenIter::new(&tokens);
+        // TODO(sbdchd): pretty sure this should be (4 + 3) - 2
+        // instead of 4 + (3 - 2)
+        assert_eq!(
+            parse_expr(&mut tokens),
+            Ok(Expr::BinExp(BinExp {
+                op: BinOp::Plus,
+                lhs: Box::new(Expr::Num(4.0)),
+                rhs: Box::new(Expr::BinExp(BinExp {
+                    op: BinOp::Minus,
+                    lhs: Box::new(Expr::Num(3.0)),
+                    rhs: Box::new(Expr::Num(2.0)),
+                })),
+            }))
+        );
+    }
+
+    #[test]
+    fn test_simple_bin() {
+        let tokens: Vec<_> = Lexer::new("foo - bar").collect();
+        let mut tokens = TokenIter::new(&tokens);
+        assert_eq!(
+            parse_expr(&mut tokens),
+            Ok(Expr::BinExp(BinExp {
+                op: BinOp::Minus,
+                lhs: Box::new(Expr::PrefixExp(Box::new(PrefixExpr::Var(Var::Name(Name(
+                    String::from("foo")
+                )))))),
+                rhs: Box::new(Expr::PrefixExp(Box::new(PrefixExpr::Var(Var::Name(Name(
+                    String::from("bar")
+                ))))))
+            }))
+        );
+    }
+
+    #[test]
     fn test_parse_prefix_exp_parens() {
         let p = r#"foo"#;
         let tokens: Vec<_> = Lexer::new(p).collect();
@@ -1336,6 +1425,12 @@ mod test_parse {
 
     #[test]
     fn test_parse_prefix_exp() {
+        let p = "false)";
+        let tokens: Vec<_> = Lexer::new(p).collect();
+        let mut tokens = TokenIter::new(&tokens);
+        assert_eq!(parse_expr(&mut tokens), Ok(Expr::Bool(false)),);
+        assert_eq!(tokens.next().map(to_kind), Some(TokenKind::RParen));
+
         let p = r#"(false)"#;
         let tokens: Vec<_> = Lexer::new(p).collect();
 
